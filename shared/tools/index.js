@@ -5,6 +5,7 @@ import { definitions } from './definitions.js';
 import { scanResources } from './resources.js';
 import { mineBlock, MiningError } from './mine.js';
 import { craftOne, craftOptions, CraftError } from './craft.js';
+import { inspectWorkspaces, placeTable, craftAtTable, WorkspaceError } from './workspace.js';
 
 export class ToolRegistry {
   constructor() { this.tools = new Map(); }
@@ -21,20 +22,28 @@ export class ToolRegistry {
     if (tool.readOnly) return { state: 'COMPLETED', result: await tool.run(bot, goal.args, null, context) };
     let toolReason;
     const result = await arbiter.run('strategy', 100, async session => {
-      try { return await tool.run(bot, goal.args, session, context); }
-      catch (error) { if (error instanceof MiningError || error instanceof CraftError) toolReason = error.code; throw error; }
+      try { return await tool.run(bot, goal.args, session, { ...context, arbiter }); }
+      catch (error) { if (error instanceof MiningError || error instanceof CraftError || error instanceof WorkspaceError) toolReason = error.code; throw error; }
     }, tool.timeoutMs);
     if (toolReason && result.state === 'FAILED') result.reason = toolReason;
     if (goal.tool === 'mine' || goal.tool === 'craft') context.emit?.({ type: goal.tool === 'mine' ? 'MINING-RESULT' : 'CRAFT-RESULT', state: result.state, reason: result.reason ?? null, result: result.result ?? null });
+    if (goal.tool === 'place_crafting_table' || goal.tool === 'craft_at_table') context.emit?.({ type: 'WORKSPACE-RESULT', tool: goal.tool, ...result });
     return result;
   }
 }
-export function createToolRegistry({ miningPolicy = { enabled: false } } = {}) {
+export function createToolRegistry({ miningPolicy = { enabled: false }, workspacePolicy = { enabled: false } } = {}) {
   const registry = new ToolRegistry();
   registry.register('scan', { readOnly: true, run: (bot, args, session, { observe }) => ({ observation: observe(bot) }) });
   registry.register('scan_resources', { readOnly: true, run: bot => ({ resources: scanResources(bot) }) });
   registry.register('craft_options', { readOnly: true, run: bot => craftOptions(bot) });
   registry.register('craft', { timeoutMs: 15000, run: (bot, args, session) => craftOne(bot, args, session) });
+  const workspace = structuredClone(workspacePolicy);
+  registry.register('workspace_options', { readOnly: true, run: bot => inspectWorkspaces(bot, workspace) });
+  if (workspace.enabled) {
+    const constraints = { dimension: workspace.dimension, area: workspace.area };
+    registry.register('place_crafting_table', { timeoutMs: 8000, constraints, run: (bot, args, session) => placeTable(bot, args, workspace, session) });
+    registry.register('craft_at_table', { timeoutMs: 15000, constraints, run: (bot, args, session, context) => craftAtTable(bot, args, workspace, session, context) });
+  }
   registry.register('wait', { timeoutMs: 5500, run: (bot, args, { signal }) => delay(args.durationMs, undefined, { signal }) });
   registry.register('move_step', { timeoutMs: 1200, run: async (bot, args, session, { emit = () => {} }) => {
     const position = bot.entity?.position;

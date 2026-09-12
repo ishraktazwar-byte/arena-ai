@@ -12,16 +12,20 @@ export function parseConfig(env, agent) {
   if (!Number.isInteger(dailyRequestLimit) || dailyRequestLimit < 1 || dailyRequestLimit > 10000) throw new Error('Invalid AI_DAILY_REQUEST_LIMIT');
   const worldId = env.MC_WORLD_ID?.trim() || `${env.MC_HOST.trim().toLowerCase()}:${port}`;
   if (!/^[a-zA-Z0-9_:.-]{1,160}$/.test(worldId)) throw new Error('Invalid MC_WORLD_ID');
-  if (env.MC_MINING_ENABLED && !['true', 'false'].includes(env.MC_MINING_ENABLED)) throw new Error('MC_MINING_ENABLED must be true or false');
-  let miningPolicy = { enabled: false };
-  if (env.MC_MINING_ENABLED === 'true') {
-    const bounds = (env.MC_MINING_AREA || '').split(',').map(value => value.trim());
-    if (bounds.length !== 6 || bounds.some(value => !/^-?\d+$/.test(value))) throw new Error('MC_MINING_AREA requires six integer bounds');
-    const [minX, minY, minZ, maxX, maxY, maxZ] = bounds.map(Number);
-    if ([minX, minY, minZ, maxX, maxY, maxZ].some(value => !Number.isSafeInteger(value) || Math.abs(value) > 30000000) || minX > maxX || minY > maxY || minZ > maxZ || minY < -64 || maxY > 319) throw new Error('Invalid MC_MINING_AREA bounds');
-    const dimension = env.MC_MINING_DIMENSION || 'overworld';
-    if (!['overworld', 'the_nether', 'the_end'].includes(dimension)) throw new Error('Invalid MC_MINING_DIMENSION');
-    miningPolicy = { enabled: true, dimension, area: { minX, minY, minZ, maxX, maxY, maxZ } };
-  }
-  return { miningPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
+  const miningPolicy = parseAreaPolicy(env, 'MC_MINING');
+  const workspacePolicy = parseAreaPolicy(env, 'MC_WORKSPACE');
+  return { miningPolicy, workspacePolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
+}
+
+function parseAreaPolicy(env, prefix) {
+  const enabled = env[`${prefix}_ENABLED`];
+  if (enabled && !['true', 'false'].includes(enabled)) throw new Error(`${prefix}_ENABLED must be true or false`);
+  if (enabled !== 'true') return { enabled: false };
+  const bounds = (env[`${prefix}_AREA`] || '').split(',').map(value => value.trim());
+  if (bounds.length !== 6 || bounds.some(value => !/^-?\d+$/.test(value))) throw new Error(`${prefix}_AREA requires six integer bounds`);
+  const [minX, minY, minZ, maxX, maxY, maxZ] = bounds.map(Number);
+  if ([minX, minY, minZ, maxX, maxY, maxZ].some(value => !Number.isSafeInteger(value) || Math.abs(value) > 30000000) || minX > maxX || minY > maxY || minZ > maxZ || minY < -64 || maxY > 319) throw new Error(`Invalid ${prefix}_AREA bounds`);
+  const dimension = env[`${prefix}_DIMENSION`] || 'overworld';
+  if (!['overworld', 'the_nether', 'the_end'].includes(dimension)) throw new Error(`Invalid ${prefix}_DIMENSION`);
+  return { enabled: true, dimension, area: { minX, minY, minZ, maxX, maxY, maxZ } };
 }

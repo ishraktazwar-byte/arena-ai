@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.3 — guarded starter crafting and inventory verification.**
+**Current: V0.2.4 — approved crafting-table placement and automatic table crafting.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -14,18 +14,21 @@ An autonomous Minecraft-agent platform under development.
 - Stable melee targets, equipment selection, safe approach and final attack checks.
 - Persistent local observations, deaths and goal outcomes with bounded retrieval.
 - A runtime tool catalog: `scan`, `scan_resources`, `craft_options`, `craft`,
-  `wait`, `move_step`, and opt-in `mine`—no generated JavaScript.
+  `wait`, `move_step`, `workspace_options`, opt-in `mine`,
+  `place_crafting_table` and `craft_at_table`—no generated JavaScript.
 - Visible nearby resource observations and region-limited single-block mining
   with equipment, geometry, cancellation and server-confirmation checks.
 - Single-batch starter crafting with guarded clicks, bounded waits and
   authoritative inventory verification.
+- Approved-area crafting-table placement and automatic opening/crafting/closing,
+  without manual window setup. Late opening replies are fenced from later tasks.
 - Optional OpenRouter free-router planning, timeout/retry handling and a shared
   daily request budget. With AI off/unavailable, strategy falls back to scanning;
   local eating, combat and escape do not need an API key.
 
 **This is not a finished civilization simulation or live-validated survival bot.**
-There is no ranged combat, shield tactic, complete gathering workflow, automatic
-crafting-table placement/opening, farming, settlement, economy or diplomacy system yet. Memory currently stores local events, not a complete
+There is no ranged combat, shield tactic, complete gathering workflow, farming,
+settlement, economy or diplomacy system yet. Memory currently stores local events, not a complete
 resource map, social model or learned skill system. No idle-shutdown avoidance.
 
 ## Windows CMD setup
@@ -117,8 +120,9 @@ shift-clicks to craft repeatedly, or automatically chains a production plan.
 
 Supported outputs: eight overworld wood plank types, sticks, crafting tables,
 and wooden/stone pickaxes, axes, shovels, swords and hoes. The 2×2 player grid
-handles planks/sticks/tables. **Tool recipes require an already-open crafting-table
-window. This version does not place or open a table automatically.**
+handles planks/sticks/tables. `craft` requires an already-open table for 3×3
+recipes; `craft_at_table` opens an approved nearby table, crafts one batch, and
+closes it within the same interruptible action.
 
 Ingredients and the output destination must be in main inventory slots below 36;
 hotbar-only ingredients are deliberately not used because the pinned Mineflayer
@@ -139,6 +143,49 @@ local inventory updates. Results describe observed changes rather than proving
 exclusive causation. Interrupted crafting can already have consumed materials;
 it is not a rollback transaction or an item-loss guarantee.
 
+### Approved crafting workspaces
+
+Workspace tools are opt-in and independent of mining permission:
+
+```text
+MC_WORKSPACE_ENABLED=true
+MC_WORKSPACE_DIMENSION=overworld
+MC_WORKSPACE_AREA=minX,minY,minZ,maxX,maxY,maxZ
+```
+
+Replace the six bounds with an owner-approved area that excludes player builds
+and important paths. There is no authorized area by default. `workspace_options`
+lists up to eight visible tables and eight passing placement candidates.
+
+- `place_crafting_table` places one carried table into a known empty cell on
+  inert, full-block ground. It refuses body/entity overlap, occupied/head-blocked
+  cells, unsafe terrain and placement that removes every known flat escape step.
+  It requires a server block packet reporting the table; inventory counts are
+  reported separately rather than assumed to prove consumption.
+- A table in main inventory can be staged with one guarded number-key swap into
+  an **empty** hotbar slot. The helper never overwrites a full hotbar or tosses
+  items to make room.
+- `craft_at_table` selects an empty hotbar slot, revalidates and interacts with one
+  nearby approved table, waits for server-backed window data, runs the guarded
+  starter crafting handler, then closes the owned window. It does not move or
+  place a missing table. An empty hotbar slot is required when the hand is full.
+
+World interactions are pinned to the 1.21.1 packet format and sent only after
+explicit guarded aiming. There are no internal asynchronous placement/opening
+helper calls that can send an interaction after cancellation.
+
+**An unresolved opening response disables further workspace interactions until
+reconnect.** Minecraft window replies do not identify the originating request.
+This prevents a delayed old reply from being used for a new craft. Late windows
+are closed through a separate priority-2000 window-safety action; it may briefly
+preempt movement/combat. Other local reflexes can continue, but the runtime does
+not automatically reconnect or resume the uncertain workspace operation.
+
+An already-sent placement may still occur after interruption. There is no world
+rollback, ownership/claims detection, automatic table removal or continuous
+production script. Even with all offline tests passing, live server behavior
+and plugin/anti-cheat compatibility remain unverified.
+
 ### Persistent memory
 
 `MC_WORLD_ID=arena-world-1` identifies the actual world, not its temporary network
@@ -157,7 +204,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v3 reads v1/v2 snapshots and upgrades on the next write; older releases
+Memory schema v4 reads v1–v3 snapshots and upgrades on the next write; older releases
 will refuse v2 rather than silently interpreting newer tool history. Resource
 locations appear in current observations but are not yet persisted as a world map.
 When cloud AI is enabled, retrieved local records are sent as planning context.
@@ -197,8 +244,9 @@ is not a complete competent-player combat model.
 | V0.2.1 | Persistent structured memory and retrieval | 81 |
 | V0.2.2 | Resource scanning, tool registry and guarded mining | 107 |
 | V0.2.3 | Starter crafting, guarded clicks and inventory verification | 130 |
+| V0.2.4 | Approved table placement/opening and late-window safety | 163 |
 
-See `docs/V0.2.3.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.4.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
