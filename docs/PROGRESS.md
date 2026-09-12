@@ -65,7 +65,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.14 verification of fresh drop selection within short plans is recorded in
+V0.2.14: 408 local tests pass; all four Ubuntu/Windows × Node 22/24 hosted jobs
+passed. Exact implementation and CI proof for fresh drop selection are recorded in
 [V0.2.14.md](V0.2.14.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
