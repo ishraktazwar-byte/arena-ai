@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.4 — approved crafting-table placement and automatic table crafting.**
+**Current: V0.2.5 — bounded dropped-item collection with server inventory confirmation.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -15,13 +15,15 @@ An autonomous Minecraft-agent platform under development.
 - Persistent local observations, deaths and goal outcomes with bounded retrieval.
 - A runtime tool catalog: `scan`, `scan_resources`, `craft_options`, `craft`,
   `wait`, `move_step`, `workspace_options`, opt-in `mine`,
-  `place_crafting_table` and `craft_at_table`—no generated JavaScript.
+  `place_crafting_table`, `craft_at_table`, `scan_items` and opt-in `collect_items`—no generated JavaScript.
 - Visible nearby resource observations and region-limited single-block mining
   with equipment, geometry, cancellation and server-confirmation checks.
 - Single-batch starter crafting with guarded clicks, bounded waits and
   authoritative inventory verification.
 - Approved-area crafting-table placement and automatic opening/crafting/closing,
   without manual window setup. Late opening replies are fenced from later tasks.
+- Separate approved-area dropped-item collection, using short terrain-checked steps
+  and both pickup reports and authoritative inventory deltas.
 - Optional OpenRouter free-router planning, timeout/retry handling and a shared
   daily request budget. With AI off/unavailable, strategy falls back to scanning;
   local eating, combat and escape do not need an API key.
@@ -204,8 +206,8 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v4 reads v1–v3 snapshots and upgrades on the next write; older releases
-will refuse v2 rather than silently interpreting newer tool history. Resource
+Memory schema v5 reads v1–v4 snapshots and upgrades on the next write; older releases
+refuse unsupported newer schemas rather than silently interpreting newer tool history. Resource
 locations appear in current observations but are not yet persisted as a world map.
 When cloud AI is enabled, retrieved local records are sent as planning context.
 These files still contain private gameplay history/locations; keep them local.
@@ -245,8 +247,9 @@ is not a complete competent-player combat model.
 | V0.2.2 | Resource scanning, tool registry and guarded mining | 107 |
 | V0.2.3 | Starter crafting, guarded clicks and inventory verification | 130 |
 | V0.2.4 | Approved table placement/opening and late-window safety | 163 |
+| V0.2.5 | Approved dropped-item collection and pickup verification | 191 |
 
-See `docs/V0.2.4.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.5.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -254,3 +257,16 @@ matrix does not prove real server combat or cloud-provider behavior.
 Secrets and token caches are ignored (`.env`, `runtime/`). Never distribute them
 in ZIPs. Dependencies are locked; the known six moderate authentication-chain
 audit findings are documented in V0.1.0 and remain unresolved.
+
+## V0.2.5 collection permission
+
+`scan_items` is read-only and always available. To authorize collection, set
+`MC_COLLECTION_ENABLED=true`, `MC_COLLECTION_DIMENSION=overworld` and
+`MC_COLLECTION_AREA=minX,minY,minZ,maxX,maxY,maxZ` in your local `.env`. Use actual
+integer bounds for a small owner-approved flat test area, including the feet/drop
+Y level. Mining and workspace permissions do **not** authorize collection.
+Dropped-item ownership is not observable, so do not approve a shared area without
+its owners’ consent. Minecraft can automatically pick up nearby items even during
+a failed/cancelled attempt; this tool cannot disable incidental pickups.
+
+See [V0.2.5 release notes and pending live checks](docs/V0.2.5.md).

@@ -210,7 +210,7 @@ test('legacy schema-v1 snapshots migrate on write before recording new tool outc
     assert.equal(reopened.size, 1);
     await reopened.remember('goal_result', observation, { tool: 'mine', state: 'FAILED' });
     const saved = JSON.parse(await readFile(path, 'utf8'));
-    assert.equal(saved.schemaVersion, 4);
+    assert.equal(saved.schemaVersion, 5);
     assert.equal(saved.records.at(-1).data.tool, 'mine');
   } finally { await reopened.close(); }
 });
@@ -230,7 +230,7 @@ test('schema-v2 snapshots migrate to the current schema for crafting history', a
   const reopened = await MemoryStore.open(f.settings);
   try {
     await reopened.remember('goal_result', observation, { tool: 'craft', state: 'CANCELLED' });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 4);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 5);
     assert.equal(reopened.retrieve(observation).some(r => r.data.tool === 'craft'), true);
   } finally { await reopened.close(); }
 });
@@ -243,7 +243,22 @@ test('schema-v3 history migrates before storing workspace outcomes', async t => 
   try {
     await reopened.remember('goal_result', observation, { tool: 'place_crafting_table', state: 'COMPLETED' });
     await reopened.remember('goal_result', observation, { tool: 'craft_at_table', state: 'CANCELLED' });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 4);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 5);
     assert.ok(reopened.retrieve(observation).some(record => record.data.tool === 'craft_at_table'));
   } finally { await reopened.close(); }
+});
+test('schema-v4 snapshots migrate and preserve collection outcomes through restart', async t => {
+  const f = await fixture(t); await f.store.remember('spawn', observation); await f.store.close();
+  const path = join(f.directory, 'memory.json');
+  const prior = JSON.parse(await readFile(path, 'utf8')); prior.schemaVersion = 4;
+  await writeFile(path, JSON.stringify(prior));
+  const reopened = await MemoryStore.open(f.settings);
+  try {
+    await reopened.remember('goal_result', observation, { tool: 'scan_items', state: 'COMPLETED' });
+    await reopened.remember('goal_result', observation, { tool: 'collect_items', state: 'CANCELLED' });
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 5);
+  } finally { await reopened.close(); }
+  const again = await MemoryStore.open(f.settings);
+  try { assert.ok(again.retrieve(observation).some(record => record.data.tool === 'collect_items' && record.data.state === 'CANCELLED')); }
+  finally { await again.close(); }
 });

@@ -14,7 +14,8 @@ export function parseConfig(env, agent) {
   if (!/^[a-zA-Z0-9_:.-]{1,160}$/.test(worldId)) throw new Error('Invalid MC_WORLD_ID');
   const miningPolicy = parseAreaPolicy(env, 'MC_MINING');
   const workspacePolicy = parseAreaPolicy(env, 'MC_WORKSPACE');
-  return { miningPolicy, workspacePolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
+  const collectionPolicy = parseAreaPolicy(env, 'MC_COLLECTION');
+  return { miningPolicy, workspacePolicy, collectionPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
 }
 
 function parseAreaPolicy(env, prefix) {

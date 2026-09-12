@@ -10,16 +10,19 @@ export const definitions = Object.freeze({
   workspace_options: { description: 'List nearby visible crafting tables and passing placement candidates in the approved work area.', args: {} },
   place_crafting_table: { description: 'Place one carried crafting table on inert ground in the approved work area; requires empty destination and server confirmation. Does not walk.', args: { x: 'integer block coordinate', y: 'integer block coordinate -64..319', z: 'integer block coordinate' } },
   craft_at_table: { description: 'Open one visible approved crafting table with empty hand, craft one starter batch, then close the owned window. Does not walk or place a table.', args: { x: 'integer block coordinate', y: 'integer block coordinate -64..319', z: 'integer block coordinate', item: craftItems.join('|') } },
+  scan_items: { description: 'Observe at most 16 visible dropped-item stacks within four blocks; report UUID, item name and pickup eligibility. Ownership is not observable.', args: {} },
+  collect_items: { description: 'Attempt pickup of one specified dropped-item stack within an approved collection area. Up to five short flat-ground steps; requires pickup and inventory evidence.', args: { entityId: 'integer entity ID 0..2147483647', entityUuid: 'exact UUID from scan_items', expectedItem: 'exact item name from scan_items' } },
   mine: { description: 'Attempt one visible resource block inside the operator-approved mining area. No approach, tunneling or automatic repeat.', args: { x: 'integer block coordinate', y: 'integer block coordinate -64..319', z: 'integer block coordinate', expectedBlock: 'exact resource block name from observation' } }
 });
 export function validArgs(tool, args) {
   if (!args || Array.isArray(args) || typeof args !== 'object') return false;
   const keys = Object.keys(args).sort().join(',');
-  if (tool === 'scan' || tool === 'scan_resources' || tool === 'craft_options' || tool === 'workspace_options') return keys === '';
+  if (tool === 'scan' || tool === 'scan_resources' || tool === 'craft_options' || tool === 'workspace_options' || tool === 'scan_items') return keys === '';
   if (tool === 'wait') return keys === 'durationMs' && Number.isInteger(args.durationMs) && args.durationMs >= 100 && args.durationMs <= 5000;
   if (tool === 'move_step') return keys === 'direction' && ['north', 'south', 'east', 'west'].includes(args.direction);
   if (tool === 'craft') return keys === 'item' && craftItems.includes(args.item);
   if (tool === 'place_crafting_table' || tool === 'craft_at_table') return keys === (tool === 'place_crafting_table' ? 'x,y,z' : 'item,x,y,z') && ['x', 'y', 'z'].every(k => Number.isInteger(args[k]) && Math.abs(args[k]) <= 30000000) && args.y >= -64 && args.y <= 319 && (tool !== 'craft_at_table' || craftItems.includes(args.item));
+  if (tool === 'collect_items') return keys === 'entityId,entityUuid,expectedItem' && Number.isInteger(args.entityId) && args.entityId >= 0 && args.entityId <= 2147483647 && typeof args.entityUuid === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(args.entityUuid) && typeof args.expectedItem === 'string' && /^[a-z0-9_]{1,64}$/.test(args.expectedItem);
   if (tool === 'mine') return keys === 'expectedBlock,x,y,z' && ['x', 'y', 'z'].every(k => Number.isInteger(args[k]) && Math.abs(args[k]) <= 30000000) && args.y >= -64 && args.y <= 319 && typeof args.expectedBlock === 'string' && /^[a-z_]{1,64}$/.test(args.expectedBlock);
   return false;
 }

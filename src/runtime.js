@@ -6,8 +6,9 @@ import { executeGoal, createToolRegistry } from '../shared/tools/index.js';
 import { scanResources } from '../shared/tools/resources.js';
 import { craftOptions } from '../shared/tools/craft.js';
 import { inspectWorkspaces } from '../shared/tools/workspace.js';
+import { scanItems } from '../shared/tools/collect.js';
 
-export function observe(bot, { workspacePolicy = { enabled: false } } = {}) {
+export function observe(bot, { workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false } } = {}) {
   const position = bot.entity?.position;
   return {
     observedAt: new Date().toISOString(), health: bot.health ?? null, food: bot.food ?? null,
@@ -17,16 +18,17 @@ export function observe(bot, { workspacePolicy = { enabled: false } } = {}) {
     equippedItem: bot.heldItem?.name ?? null,
     crafting: craftOptions(bot),
     workspace: inspectWorkspaces(bot, workspacePolicy),
+    droppedItems: scanItems(bot, collectionPolicy),
     nearbyResources: scanResources(bot),
     inventory: bot.inventory?.items().map(item => ({ name: item.name, count: item.count })) ?? [],
     nearbyEntities: position ? Object.values(bot.entities || {}).filter(e => e !== bot.entity && e.position && e.position.distanceTo(position) <= 24).map(e => ({ id: e.id, name: e.name || e.username || 'unknown', distance: e.position.distanceTo(position), visibility: 'unverified' })) : []
   };
 }
 
-export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false } } = {}) {
+export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false } } = {}) {
   let ready = false;
-  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy });
-  const observeBody = body => observe(body, { workspacePolicy });
+  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy, collectionPolicy });
+  const observeBody = body => observe(body, { workspacePolicy, collectionPolicy });
   const remember = (kind, observation) => {
     if (memory) void memory.remember(kind, observation).catch(() => emit({ type: 'MEMORY-ERROR', code: 'memory_write_failed' }));
   };
