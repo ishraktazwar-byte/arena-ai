@@ -79,9 +79,9 @@ test('unsafe health, hostile presence and unsupported protocol cause no clicks',
   }
 });
 test('cancellation during a delayed click prevents all subsequent clicks', async () => {
-  const f = fixture(); let finish; const click = f.bot.clickWindow;
-  f.bot.clickWindow = async (...args) => { await click(...args); await new Promise(resolve => { finish = resolve; }); };
-  const pending = f.craft(); await settle();
+  const f = fixture(); let finish, entered; const began = new Promise(resolve => { entered = resolve; }); const click = f.bot.clickWindow;
+  f.bot.clickWindow = async (...args) => { await click(...args); await new Promise(resolve => { finish = resolve; entered(); }); };
+  const pending = f.craft(); await began;
   f.arbiter.cancel('creeper'); finish(); await settle();
   assert.equal((await pending).state, 'CANCELLED');
   assert.equal(f.calls.filter(c => c[0] === 'click').length, 1);
@@ -97,7 +97,7 @@ test('a changed window after a click is not closed by stale cleanup', async () =
 test('hung click and hung synchronization are bounded', async () => {
   for (const method of ['clickWindow', '_syncWindow']) {
     const f = fixture(); f.bot[method] = () => new Promise(() => {});
-    assert.equal((await f.craft()).state, 'FAILED');
+    assert.equal((await f.craft('oak_planks', { stepTimeoutMs: 20 })).state, 'FAILED');
     assert.equal(f.bot._client.listenerCount('window_items'), 0);
   }
 });
@@ -159,9 +159,9 @@ test('registry exposes crafting failures as bounded diagnostic codes', async () 
   assert.equal(events[0].type, 'CRAFT-RESULT');
 });
 test('death skips inventory cleanup writes and prevents delayed continuation', async () => {
-  const f = fixture(); let finish; const click = f.bot.clickWindow;
-  f.bot.clickWindow = async (...args) => { await click(...args); await new Promise(resolve => { finish = resolve; }); };
-  const pending = f.craft(); await settle(); f.bot.health = 0;
+  const f = fixture(); let finish, entered; const began = new Promise(resolve => { entered = resolve; }); const click = f.bot.clickWindow;
+  f.bot.clickWindow = async (...args) => { await click(...args); await new Promise(resolve => { finish = resolve; entered(); }); };
+  const pending = f.craft(); await began; f.bot.health = 0;
   f.arbiter.cancel('death'); finish(); await settle();
   assert.equal((await pending).state, 'CANCELLED');
   assert.equal(f.calls.filter(c => c[0] === 'click').length, 1);

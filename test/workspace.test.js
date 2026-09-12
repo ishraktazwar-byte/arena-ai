@@ -12,6 +12,7 @@ import { craftFixture, vec } from '../test-support/craft-fixture.js';
 const policy = { enabled: true, dimension: 'overworld', area: { minX: -5, minY: 64, minZ: -5, maxX: 5, maxY: 64, maxZ: 5 } };
 const point = { x: 2, y: 64, z: 0 };
 const craftArgs = { ...point, item: 'wooden_pickaxe' };
+function latch() { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; }
 function world() {
   const cells = new Map();
   const block = (name, x, y, z) => ({ name, type: name === 'air' ? 0 : 1, stateId: name === 'crafting_table' ? 2 : name === 'air' ? 0 : 1, position: vec(x, y, z), boundingBox: name === 'air' ? 'empty' : 'block', shapes: name === 'air' ? [] : [[0, 0, 0, 1, 1, 1]], getProperties: () => ({}) });
@@ -44,8 +45,8 @@ function fixture(t) {
   };
   const arbiter = new ControlArbiter(() => calls.push(['stop']));
   const craft = async () => { calls.push(['craft']); return { item: 'wooden_pickaxe', serverInventoryVerified: true }; };
-  const runPlace = opts => arbiter.run('strategy', 100, s => placeTable(bot, point, policy, s, { responseTimeoutMs: 20, ...opts }), 1500);
-  const runCraft = opts => arbiter.run('strategy', 100, s => craftAtTable(bot, craftArgs, policy, s, { arbiter, emit: e => events.push(e), responseTimeoutMs: 20, craft, ...opts }), 1500);
+  const runPlace = opts => arbiter.run('strategy', 100, s => placeTable(bot, point, policy, s, { responseTimeoutMs: 2500, ...opts }), 5000);
+  const runCraft = opts => arbiter.run('strategy', 100, s => craftAtTable(bot, craftArgs, policy, s, { arbiter, emit: e => events.push(e), responseTimeoutMs: 2500, craft, ...opts }), 5000);
   t.after(() => { arbiter.cancel('test_end'); bot.emit('end'); });
   return { bot, client, calls, events, item, window, arbiter, ...w, open, runPlace, runCraft };
 }
@@ -113,20 +114,20 @@ test('no held table item causes no interaction', async t => {
 });
 test('predicted local placement and unrelated server packets are not confirmation', async t => {
   const f = fixture(t); f.client.write = () => { f.put('crafting_table'); f.client.emit('block_change', { location: { ...point, x: 3 }, type: 2 }); };
-  assert.equal((await f.runPlace()).state, 'FAILED'); assert.equal(f.client.listenerCount('block_change'), 0);
+  assert.equal((await f.runPlace({ responseTimeoutMs: 20 })).state, 'FAILED'); assert.equal(f.client.listenerCount('block_change'), 0);
 });
 test('cancellation during staging or aim prevents a late placement packet', async t => {
   for (const method of ['clickWindow', 'lookAt']) {
-    const f = fixture(t); let finish;
+    const f = fixture(t); let finish; const entered = latch();
     if (method === 'clickWindow') { f.bot.heldItem = null; f.item.slot = 9; f.bot.inventory.slots[9] = f.item; f.bot.inventory.slots[36] = null; }
-    f.bot[method] = () => new Promise(resolve => { finish = resolve; });
-    const pending = f.runPlace(); await settle(); f.arbiter.cancel('death'); finish(); await settle();
+    f.bot[method] = () => new Promise(resolve => { finish = resolve; entered.resolve(); });
+    const pending = f.runPlace(); await entered.promise; f.arbiter.cancel('death'); finish(); await settle();
     assert.equal((await pending).state, 'CANCELLED'); assert.equal(f.calls.some(c => c[0] === 'block_place'), false);
   }
 });
 test('geometry changes during aim prevent placement', async t => {
-  const f = fixture(t); let finish; f.bot.lookAt = () => new Promise(resolve => { finish = resolve; });
-  const pending = f.runPlace(); await settle(); f.put('stone'); finish();
+  const f = fixture(t); let finish; const entered = latch(); f.bot.lookAt = () => new Promise(resolve => { finish = resolve; entered.resolve(); });
+  const pending = f.runPlace(); await entered.promise; f.put('stone'); finish();
   assert.equal((await pending).state, 'FAILED'); assert.equal(f.calls.some(c => c[0] === 'block_place'), false);
 });
 test('opening uses empty hand, a server-backed window, and a single owned close', async t => {
@@ -137,26 +138,26 @@ test('opening uses empty hand, a server-backed window, and a single owned close'
   assert.equal(f.bot.currentWindow, null);
 });
 test('table removal during aiming prevents interaction', async t => {
-  const f = fixture(t); f.put('crafting_table'); let finish;
-  f.bot.lookAt = () => new Promise(resolve => { finish = resolve; });
-  const pending = f.runCraft(); await settle(); f.put('air'); finish();
+  const f = fixture(t); f.put('crafting_table'); let finish; const entered = latch();
+  f.bot.lookAt = () => new Promise(resolve => { finish = resolve; entered.resolve(); });
+  const pending = f.runCraft(); await entered.promise; f.put('air'); finish();
   assert.equal((await pending).state, 'FAILED'); assert.equal(f.calls.some(c => c[0] === 'block_place'), false);
 });
 test('cancellation before opening request does not quarantine future safe work', async t => {
-  const f = fixture(t); f.put('crafting_table'); let finish;
-  f.bot.lookAt = () => new Promise(resolve => { finish = resolve; });
-  const pending = f.runCraft(); await settle(); f.arbiter.cancel('creeper'); finish(); await settle();
+  const f = fixture(t); f.put('crafting_table'); let finish; const entered = latch();
+  f.bot.lookAt = () => new Promise(resolve => { finish = resolve; entered.resolve(); });
+  const pending = f.runCraft(); await entered.promise; f.arbiter.cancel('creeper'); finish(); await settle();
   assert.equal((await pending).state, 'CANCELLED'); assert.equal(inspectWorkspaces(f.bot, policy).reconnectRequired, false);
 });
 test('unconfirmed opening times out and refuses retry until reconnect', async t => {
   const f = fixture(t); f.put('crafting_table'); f.client.write = () => {};
-  assert.equal((await f.runCraft()).state, 'FAILED');
+  assert.equal((await f.runCraft({ responseTimeoutMs: 20 })).state, 'FAILED');
   assert.equal(inspectWorkspaces(f.bot, policy).reconnectRequired, true);
-  assert.equal((await f.runCraft()).state, 'FAILED'); assert.equal(f.calls.some(c => c[0] === 'craft'), false);
+  assert.equal((await f.runCraft({ responseTimeoutMs: 20 })).state, 'FAILED'); assert.equal(f.calls.some(c => c[0] === 'craft'), false);
 });
 test('late window after cancellation is closed by a new safety action, not old strategy', async t => {
-  const f = fixture(t); f.put('crafting_table'); f.client.write = () => {};
-  const pending = f.runCraft({ responseTimeoutMs: 500 }); await settle();
+  const f = fixture(t); const sent = latch(); f.put('crafting_table'); f.client.write = () => { sent.resolve(); };
+  const pending = f.runCraft({ responseTimeoutMs: 500 }); await sent.promise;
   const escape = f.arbiter.run('escape', 1000, () => new Promise(() => {}));
   assert.equal((await pending).state, 'CANCELLED');
   f.open(); await settle();
@@ -181,8 +182,8 @@ test('unexpected chest window is not treated as a crafting table', async t => {
   assert.equal(f.calls.some(c => c[0] === 'craft'), false);
 });
 test('cancellation after confirmed open closes known window without reconnect quarantine', async t => {
-  const f = fixture(t); f.put('crafting_table'); let finish;
-  const pending = f.runCraft({ craft: () => new Promise(resolve => { finish = resolve; }) }); await settle();
+  const f = fixture(t); f.put('crafting_table'); let finish; const entered = latch();
+  const pending = f.runCraft({ craft: () => new Promise(resolve => { finish = resolve; entered.resolve(); }) }); await entered.promise;
   f.arbiter.cancel('death'); finish({}); await settle();
   assert.equal((await pending).state, 'CANCELLED'); assert.equal(f.bot.currentWindow, null);
   assert.equal(inspectWorkspaces(f.bot, policy).reconnectRequired, false);
@@ -251,8 +252,8 @@ test('ambiguous multiple server opens cannot start crafting', async t => {
   assert.equal(inspectWorkspaces(f.bot, policy).reconnectRequired, true);
 });
 test('late windows cannot be reused across death and respawn', async t => {
-  const f = fixture(t); f.put('crafting_table'); f.client.write = () => {};
-  const pending = f.runCraft({ responseTimeoutMs: 500 }); await settle();
+  const f = fixture(t); const sent = latch(); f.put('crafting_table'); f.client.write = () => { sent.resolve(); };
+  const pending = f.runCraft({ responseTimeoutMs: 500 }); await sent.promise;
   f.bot.health = 0; f.arbiter.cancel('death'); assert.equal((await pending).state, 'CANCELLED');
   f.open(); await settle(); assert.equal(f.calls.some(c => c[0] === 'close'), false);
   f.bot.health = 20; f.bot.emit('spawn'); await settle();
@@ -260,9 +261,9 @@ test('late windows cannot be reused across death and respawn', async t => {
 });
 test('late window close waits for its safety action and handles a newer late window', async t => {
   const f = fixture(t); f.put('crafting_table'); f.client.write = () => {};
-  assert.equal((await f.runCraft()).state, 'FAILED');
-  let finish; const close = f.bot.closeWindow;
-  f.bot.closeWindow = async win => { await close(win); await new Promise(resolve => { finish = resolve; }); };
+  assert.equal((await f.runCraft({ responseTimeoutMs: 20 })).state, 'FAILED');
+  let finish; const entered = latch(); const close = f.bot.closeWindow;
+  f.bot.closeWindow = async win => { await close(win); await new Promise(resolve => { finish = resolve; entered.resolve(); }); };
   f.open(); await settle();
   const other = { ...f.window, id: 6 }; f.bot.currentWindow = other; f.bot.emit('windowOpen', other);
   await settle(); f.bot.closeWindow = close; finish(); await settle();
@@ -270,8 +271,8 @@ test('late window close waits for its safety action and handles a newer late win
   assert.equal(f.calls.filter(c => c[0] === 'close').length, 2);
 });
 test('cancelled placement cleans acknowledgement listener and never claims rollback', async t => {
-  const f = fixture(t); f.client.write = (name, packet) => f.calls.push([name, packet]);
-  const pending = f.runPlace({ responseTimeoutMs: 500 }); await settle();
+  const f = fixture(t); const sent = latch(); f.client.write = (name, packet) => { f.calls.push([name, packet]); sent.resolve(); };
+  const pending = f.runPlace({ responseTimeoutMs: 500 }); await sent.promise;
   f.arbiter.cancel('danger'); assert.equal((await pending).state, 'CANCELLED');
   assert.equal(f.client.listenerCount('block_change'), 0);
   f.put('crafting_table'); f.client.emit('block_change', { location: point, type: 2 });

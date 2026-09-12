@@ -58,7 +58,7 @@ export function craftFixture(table = false) {
   const packet = () => ({ windowId: window.id, items: window.slots.map(s => s ? { itemId: s.type, itemCount: s.count } : { itemCount: 0 }), carriedItem: window.selectedItem ? { itemId: window.selectedItem.type, itemCount: window.selectedItem.count } : { itemCount: 0 } });
   bot._syncWindow = async () => { calls.push(['sync']); client.emit('window_items', packet()); };
   const arbiter = new ControlArbiter(() => calls.push(['stop']));
-  const craft = (item = 'oak_planks', options = {}) => arbiter.run('strategy', 100, session => craftOne(bot, { item }, session, { stepTimeoutMs: 20, ...options }), 2000);
+  const craft = (item = 'oak_planks', options = {}) => arbiter.run('strategy', 100, session => craftOne(bot, { item }, session, { stepTimeoutMs: 2000, ...options }), 10000);
   put('oak_log', 2);
   return { bot, window, calls, put, recipes, craft, arbiter, packet };
 }
