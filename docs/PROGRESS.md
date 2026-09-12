@@ -46,8 +46,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.6 baseline: 215 tests passed on Ubuntu/Windows with Node 22/24. V0.2.7 adds
-resource-memory regression coverage; its final verification is recorded in
+V0.2.7: 236 tests passed on Ubuntu/Windows with Node 22/24, including resource-memory
+regressions. Exact implementation and hosted CI proof are recorded in
 [V0.2.7.md](V0.2.7.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
