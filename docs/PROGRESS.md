@@ -51,8 +51,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.8 baseline: 259 tests passed on Ubuntu/Windows with Node 22/24. V0.2.9
-verification of autonomous and restricted deployment is recorded in
+V0.2.9: 281 tests passed on Ubuntu/Windows with Node 22/24. Exact implementation
+and hosted CI proof for autonomous and restricted deployment are recorded in
 [V0.2.9.md](V0.2.9.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
