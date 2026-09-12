@@ -4,6 +4,7 @@ import { validateGoal } from '../../src/strategy/goals.js';
 import { definitions } from './definitions.js';
 import { scanResources } from './resources.js';
 import { mineBlock, MiningError } from './mine.js';
+import { craftOne, craftOptions, CraftError } from './craft.js';
 
 export class ToolRegistry {
   constructor() { this.tools = new Map(); }
@@ -18,13 +19,13 @@ export class ToolRegistry {
     const goal = this.validate(proposed);
     const tool = this.tools.get(goal.tool);
     if (tool.readOnly) return { state: 'COMPLETED', result: await tool.run(bot, goal.args, null, context) };
-    let miningReason;
+    let toolReason;
     const result = await arbiter.run('strategy', 100, async session => {
       try { return await tool.run(bot, goal.args, session, context); }
-      catch (error) { if (error instanceof MiningError) miningReason = error.code; throw error; }
+      catch (error) { if (error instanceof MiningError || error instanceof CraftError) toolReason = error.code; throw error; }
     }, tool.timeoutMs);
-    if (miningReason && result.state === 'FAILED') result.reason = miningReason;
-    if (goal.tool === 'mine') context.emit?.({ type: 'MINING-RESULT', state: result.state, reason: result.reason ?? null, result: result.result ?? null });
+    if (toolReason && result.state === 'FAILED') result.reason = toolReason;
+    if (goal.tool === 'mine' || goal.tool === 'craft') context.emit?.({ type: goal.tool === 'mine' ? 'MINING-RESULT' : 'CRAFT-RESULT', state: result.state, reason: result.reason ?? null, result: result.result ?? null });
     return result;
   }
 }
@@ -32,6 +33,8 @@ export function createToolRegistry({ miningPolicy = { enabled: false } } = {}) {
   const registry = new ToolRegistry();
   registry.register('scan', { readOnly: true, run: (bot, args, session, { observe }) => ({ observation: observe(bot) }) });
   registry.register('scan_resources', { readOnly: true, run: bot => ({ resources: scanResources(bot) }) });
+  registry.register('craft_options', { readOnly: true, run: bot => craftOptions(bot) });
+  registry.register('craft', { timeoutMs: 15000, run: (bot, args, session) => craftOne(bot, args, session) });
   registry.register('wait', { timeoutMs: 5500, run: (bot, args, { signal }) => delay(args.durationMs, undefined, { signal }) });
   registry.register('move_step', { timeoutMs: 1200, run: async (bot, args, session, { emit = () => {} }) => {
     const position = bot.entity?.position;

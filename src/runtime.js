@@ -4,6 +4,7 @@ import { CombatController } from './combat.js';
 import { StrategyController } from './strategy/controller.js';
 import { executeGoal, createToolRegistry } from '../shared/tools/index.js';
 import { scanResources } from '../shared/tools/resources.js';
+import { craftOptions } from '../shared/tools/craft.js';
 
 export function observe(bot) {
   const position = bot.entity?.position;
@@ -13,6 +14,7 @@ export function observe(bot) {
     position: position ? { x: position.x, y: position.y, z: position.z } : null,
     dimension: bot.game?.dimension ?? null, timeOfDay: bot.time?.timeOfDay ?? null,
     equippedItem: bot.heldItem?.name ?? null,
+    crafting: craftOptions(bot),
     nearbyResources: scanResources(bot),
     inventory: bot.inventory?.items().map(item => ({ name: item.name, count: item.count })) ?? [],
     nearbyEntities: position ? Object.values(bot.entities || {}).filter(e => e !== bot.entity && e.position && e.position.distanceTo(position) <= 24).map(e => ({ id: e.id, name: e.name || e.username || 'unknown', distance: e.position.distanceTo(position), visibility: 'unverified' })) : []

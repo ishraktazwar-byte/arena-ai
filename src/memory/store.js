@@ -2,12 +2,12 @@ import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const SCHEMA = 2; // v1 is read-compatible; new tool outcomes require v2 on write.
+const SCHEMA = 3; // v1/v2 are read-compatible; crafting outcomes require v3 on write.
 const LIMIT = 500;
 const MAX_BYTES = 2 * 1024 * 1024;
 const KINDS = new Set(['spawn', 'death', 'observation', 'goal_result']);
 const STATES = new Set(['COMPLETED', 'BLOCKED', 'CANCELLED', 'FAILED']);
-const TOOLS = new Set(['scan', 'wait', 'move_step', 'scan_resources', 'mine']); // Historical names remain readable even if a tool is disabled.
+const TOOLS = new Set(['scan', 'wait', 'move_step', 'scan_resources', 'mine', 'craft_options', 'craft']); // Historical names remain readable even if a tool is disabled.
 const label = value => typeof value === 'string' && /^[a-zA-Z0-9_:.-]{1,160}$/.test(value);
 const keysAre = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join(',') === expected.sort().join(',');
 const coordinate = p => p === null || (keysAre(p, ['x', 'y', 'z']) && Object.values(p).every(n => Number.isFinite(n) && Math.abs(n) <= 30000000));
@@ -30,8 +30,8 @@ async function load(path, agent) {
   if (Buffer.byteLength(raw) > MAX_BYTES) throw new MemoryError('memory_corrupt');
   let envelope;
   try { envelope = JSON.parse(raw); } catch { throw new MemoryError('memory_corrupt'); }
-  if (Number.isInteger(envelope?.schemaVersion) && ![1, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
-  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
+  if (Number.isInteger(envelope?.schemaVersion) && ![1, 2, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
+  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, 2, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
   if (new Set(envelope.records.map(r => r.id)).size !== envelope.records.length) throw new MemoryError('memory_corrupt');
   return envelope.records;
 }

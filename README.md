@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.2 — resource scanning and guarded single-block mining.**
+**Current: V0.2.3 — guarded starter crafting and inventory verification.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -13,17 +13,19 @@ An autonomous Minecraft-agent platform under development.
 - Basic eating, conservative risk gates and bounded flat-ground escape.
 - Stable melee targets, equipment selection, safe approach and final attack checks.
 - Persistent local observations, deaths and goal outcomes with bounded retrieval.
-- A runtime tool catalog: `scan`, `scan_resources`, `wait`, `move_step`, and opt-in
-  `mine`—no generated JavaScript.
+- A runtime tool catalog: `scan`, `scan_resources`, `craft_options`, `craft`,
+  `wait`, `move_step`, and opt-in `mine`—no generated JavaScript.
 - Visible nearby resource observations and region-limited single-block mining
   with equipment, geometry, cancellation and server-confirmation checks.
+- Single-batch starter crafting with guarded clicks, bounded waits and
+  authoritative inventory verification.
 - Optional OpenRouter free-router planning, timeout/retry handling and a shared
   daily request budget. With AI off/unavailable, strategy falls back to scanning;
   local eating, combat and escape do not need an API key.
 
 **This is not a finished civilization simulation or live-validated survival bot.**
-There is no ranged combat, shield tactic, complete gathering workflow, crafting,
-farming, settlement, economy or diplomacy system yet. Memory currently stores local events, not a complete
+There is no ranged combat, shield tactic, complete gathering workflow, automatic
+crafting-table placement/opening, farming, settlement, economy or diplomacy system yet. Memory currently stores local events, not a complete
 resource map, social model or learned skill system. No idle-shutdown avoidance.
 
 ## Windows CMD setup
@@ -104,7 +106,38 @@ The result distinguishes a server `block_change` reporting air from Mineflayer's
 optimistic local cache. A server using only another packet form may yield an
 unconfirmed/failed result even after a real break. Inventory increases are reported
 as observations, **not** guaranteed drops from this action. No automatic collection,
-crafting, ore expedition, tunnel creation or multi-agent block reservation yet.
+ore expedition, tunnel creation or multi-agent block reservation yet.
+
+### Starter crafting
+
+`craft_options` reports starter recipes that can use the current main inventory.
+`craft` accepts one allowlisted item name and makes **one recipe batch** (for
+example, one log produces four planks). It never accepts model-written recipes,
+shift-clicks to craft repeatedly, or automatically chains a production plan.
+
+Supported outputs: eight overworld wood plank types, sticks, crafting tables,
+and wooden/stone pickaxes, axes, shovels, swords and hoes. The 2×2 player grid
+handles planks/sticks/tables. **Tool recipes require an already-open crafting-table
+window. This version does not place or open a table automatically.**
+
+Ingredients and the output destination must be in main inventory slots below 36;
+hotbar-only ingredients are deliberately not used because the pinned Mineflayer
+click helper can delay hotbar clicks internally. One empty main slot is required.
+Occupied grids/cursors, unsupported windows, danger, insufficient ingredients and
+unsupported protocol versions are refused. Craft execution is pinned to 1.21.1.
+
+Each click checks action ownership and safety. Interrupted crafting stops further
+clicks; synchronous session cleanup requests closure of the owned window before
+another action begins (not after death/disconnect or if a different window opened).
+A later crafting attempt must resynchronize and see a clean server grid/cursor
+before retrying. The code does not explicitly toss items; server behavior when
+closing a full inventory or interrupting a craft still needs live testing.
+
+Success requires a fresh whole-window server snapshot showing the expected
+output gain, ingredient consumption and empty grid/cursor—not just optimistic
+local inventory updates. Results describe observed changes rather than proving
+exclusive causation. Interrupted crafting can already have consumed materials;
+it is not a rollback transaction or an item-loss guarantee.
 
 ### Persistent memory
 
@@ -124,7 +157,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v2 reads v1 snapshots and upgrades on the next write; older releases
+Memory schema v3 reads v1/v2 snapshots and upgrades on the next write; older releases
 will refuse v2 rather than silently interpreting newer tool history. Resource
 locations appear in current observations but are not yet persisted as a world map.
 When cloud AI is enabled, retrieved local records are sent as planning context.
@@ -163,8 +196,9 @@ is not a complete competent-player combat model.
 | V0.2.0 | Validated goals and optional provider | 62 |
 | V0.2.1 | Persistent structured memory and retrieval | 81 |
 | V0.2.2 | Resource scanning, tool registry and guarded mining | 107 |
+| V0.2.3 | Starter crafting, guarded clicks and inventory verification | 130 |
 
-See `docs/V0.2.2.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.3.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.

@@ -210,7 +210,7 @@ test('legacy schema-v1 snapshots migrate on write before recording new tool outc
     assert.equal(reopened.size, 1);
     await reopened.remember('goal_result', observation, { tool: 'mine', state: 'FAILED' });
     const saved = JSON.parse(await readFile(path, 'utf8'));
-    assert.equal(saved.schemaVersion, 2);
+    assert.equal(saved.schemaVersion, 3);
     assert.equal(saved.records.at(-1).data.tool, 'mine');
   } finally { await reopened.close(); }
 });
@@ -221,4 +221,16 @@ test('resource scan outcomes survive restart as history, not commands', async t 
   const reopened = await MemoryStore.open(f.settings);
   try { assert.equal(reopened.retrieve(observation)[0].data.tool, 'scan_resources'); }
   finally { await reopened.close(); }
+});
+test('schema-v2 snapshots migrate to v3 for crafting history', async t => {
+  const f = await fixture(t); await f.store.remember('spawn', observation); await f.store.close();
+  const path = join(f.directory, 'memory.json');
+  const v2 = JSON.parse(await readFile(path, 'utf8')); v2.schemaVersion = 2;
+  await writeFile(path, JSON.stringify(v2));
+  const reopened = await MemoryStore.open(f.settings);
+  try {
+    await reopened.remember('goal_result', observation, { tool: 'craft', state: 'CANCELLED' });
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 3);
+    assert.equal(reopened.retrieve(observation).some(r => r.data.tool === 'craft'), true);
+  } finally { await reopened.close(); }
 });

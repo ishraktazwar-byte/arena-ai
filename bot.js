@@ -52,7 +52,7 @@ try {
   bot.on('end', () => { void finalize().catch(() => { emit({ type: 'MEMORY-ERROR', code: 'memory_close_failed' }); process.exitCode = 1; }); });
   process.once('SIGINT', () => { void close(); });
   process.once('SIGTERM', () => { void close(); });
-  emit({ type: 'START', version: '0.2.2', message: 'Commands: status, step, stop, quit. Persistent local memory enabled; cloud planning opt-in. Live validation pending.' });
+  emit({ type: 'START', version: '0.2.3', message: 'Commands: status, step, stop, quit. Persistent local memory enabled; cloud planning opt-in. Live validation pending.' });
 } catch (error) {
   console.error(`Startup failed: ${error.code === 'ENOENT' ? 'Agent configuration not found' : error.code?.startsWith('memory_') ? error.code : 'Check local configuration and dependencies'}`);
   bot?.quit();
