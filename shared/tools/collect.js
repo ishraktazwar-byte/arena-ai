@@ -1,3 +1,4 @@
+import { bindBodySession } from '../../src/control.js';
 import { permitsPosition } from '../../src/permissions.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
@@ -64,7 +65,7 @@ function checkTarget(bot, args, policy, anchor, original) {
   if (!visibleDrop(bot, drop.position)) fail('collection_target_occluded');
   return drop;
 }
-export function scanItems(bot, policy = { enabled: false }) {
+export function scanItems(bot, policy = { enabled: false }, { expectedItem, eligibleOnly = false } = {}) {
   const result = { enabled: !!policy.enabled, ownership: 'not_observable', items: [] };
   const position = bot.entity?.position;
   if (!validPosition(position)) return result;
@@ -72,7 +73,7 @@ export function scanItems(bot, policy = { enabled: false }) {
   // Bound the inspected entity budget and the model-visible result independently.
   for (const entity of Object.values(bot.entities || {}).slice(0, 256)) {
     const drop = readDrop(bot, entity);
-    if (!drop || horizontal(position, drop.position) > MAX_DISTANCE || Math.abs(drop.position.y - position.y) > 0.6 || !visibleDrop(bot, drop.position)) continue;
+    if (!drop || (expectedItem !== undefined && drop.item !== expectedItem) || horizontal(position, drop.position) > MAX_DISTANCE || Math.abs(drop.position.y - position.y) > 0.6 || !visibleDrop(bot, drop.position)) continue;
     let eligible = false, reason = 'collection_disabled';
     if (policy.enabled) {
       try {
@@ -81,6 +82,7 @@ export function scanItems(bot, policy = { enabled: false }) {
         eligible = true; reason = 'local_checks_passed';
       } catch (error) { reason = error instanceof CollectionError ? error.code : 'collection_unavailable'; }
     }
+    if (eligibleOnly && !eligible) continue;
     result.items.push({ ...drop, distance: horizontal(position, drop.position), eligible, reason });
   }
   result.items.sort((a, b) => a.distance - b.distance || a.entityId - b.entityId);
@@ -220,4 +222,39 @@ export async function collectItems(bot, args, policy, session, {
     cleanup();
     try { stop(); } catch { /* Body cleanup belongs to the new owner after interruption. */ }
   }
+}
+
+// Resolve a desired item only at execution time: future drops need not have an
+// entity ID in the LLM plan. Selection is not proof of origin or ownership.
+export async function collectNearby(bot, args, policy, session, {
+  now = Date.now, wait = (ms, signal) => delay(ms, undefined, { signal }), ...collectionOptions
+} = {}) {
+  session = bindBodySession(bot, session, () => new CollectionError('collection_body_changed'));
+  const p = bot.entity?.position;
+  if (!validPosition(p) || !policy.enabled) fail('collection_disabled_or_unavailable');
+  const itemId = bot.registry?.itemsByName?.[args.expectedItem]?.id;
+  if (!Number.isInteger(itemId) || itemId < 0) fail('collection_unknown_item');
+  const anchor = { entity: bot.entity, dimension: bot.game?.dimension, position: { x: p.x, y: p.y, z: p.z } };
+  const originalGuard = session.guard;
+  session = { ...session, guard: fn => originalGuard(() => { checkBody(bot, policy, anchor); return fn(); }) };
+  // Fixed scan count also bounds discovery when a wall clock changes. No movement
+  // or interaction is issued while waiting for spawn/metadata packets to arrive.
+  const started = now();
+  for (let attempt = 0; attempt <= 20; attempt++) {
+    session.guard(() => {});
+    if (!emptyCapacity(bot)) fail('collection_inventory_full');
+    if (now() - started < 0 || now() - started > 1000) break;
+    const target = scanItems(bot, policy, { expectedItem: args.expectedItem, eligibleOnly: true }).items.find(drop => horizontal(anchor.position, drop.position) <= MAX_DISTANCE);
+    if (now() - started < 0 || now() - started > 1000) break;
+    if (target) {
+      const selected = { entityId: target.entityId, entityUuid: target.entityUuid, expectedItem: args.expectedItem };
+      const result = await collectItems(bot, selected, policy, session, { now, wait, ...collectionOptions });
+      session.guard(() => {});
+      return { ...result, selection: 'nearest_observed_eligible_item', originClaimed: false };
+    }
+    const remaining = 1000 - (now() - started);
+    if (remaining <= 0) break;
+    if (attempt < 20) await wait(Math.min(50, remaining), session.signal);
+  }
+  fail('collection_no_matching_drop');
 }

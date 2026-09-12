@@ -218,3 +218,39 @@ test('transient danger during final inventory resync invalidates the attempt eve
   f.bot.entities[2] = { name: 'creeper', position: vec(1, 64, 1) }; t.mock.timers.tick(50); delete f.bot.entities[2];
   finish.resolve(); assert.equal((await pending).state, 'FAILED'); assert.equal(f.client.listenerCount('block_change'), 0);
 });
+test('one planner request can harvest, bind a new drop, collect it, then replant without carried reserves', async () => {
+  const f = fixture(); f.slots[36] = null; f.bot.entity.id = 1; f.bot.entity.position = vec(1.65, 64, 0.5);
+  f.bot.clearControlStates = () => f.calls.push(['stop']); f.put('carrots', 2, 64, 0, 7);
+  const dig = f.bot.dig;
+  f.bot.dig = async b => {
+    await dig(b);
+    f.bot.entities[101] = { id: 101, uuid: '12345678-1234-4234-8234-123456789abc', name: 'item', isValid: true,
+      position: vec(2.25, 64.1, 0.5), getDroppedItem: () => ({ name: 'carrot', type: data.itemsByName.carrot.id, count: 4 }) };
+  };
+  let syncs = 0; const sync = f.bot._syncWindow;
+  f.bot._syncWindow = async () => {
+    await sync();
+    if (++syncs === 1) setImmediate(() => {
+      f.client.emit('collect', { collectedEntityId: 101, collectorEntityId: 1, pickupItemCount: 4 });
+      f.seed('carrot', 4); delete f.bot.entities[101];
+    });
+  };
+  const registry = createToolRegistry({ farmingPolicy: policy, collectionPolicy: policy }), events = [], results = []; let requests = 0;
+  const strategy = new StrategyController({ toolRegistry: registry, identity: {}, emit: e => events.push(e),
+    observe: () => ({ health: 20, food: 20, risk: { mode: 'NORMAL' }, dimension: 'overworld', position: { x: 1.65, y: 64, z: 0.5 } }),
+    provider: { plan: async () => {
+      requests++; assert.deepEqual(f.bot.entities, {}); assert.equal(f.bot.heldItem, null);
+      return { reason: '', steps: [
+        { tool: 'harvest_crop', args: { ...point, expectedCrop: 'carrots' }, reason: '' },
+        { tool: 'collect_nearby', args: { expectedItem: 'carrot' }, reason: '' },
+        { tool: 'plant_crop', args, reason: '' }
+      ] };
+    } },
+    execute: async goal => { const result = await registry.execute(f.bot, f.arbiter, goal, {}); results.push(result); return result; } });
+  strategy.start(); await strategy.tick();
+  assert.equal(requests, 1); assert.deepEqual(results.map(r => r.state), ['COMPLETED', 'COMPLETED', 'COMPLETED']);
+  assert.equal(results[1].result.inventoryGainObserved, 4); assert.equal(results[1].result.originClaimed, false);
+  assert.equal(results[2].result.serverObservedSeedling, true); assert.equal(f.slots[36].count, 3);
+  assert.equal(f.bot.blockAt(vec(2, 64, 0)).getProperties().age, '0');
+  assert.ok(events.some(e => e.type === 'STRATEGY-PLAN-COMPLETE'));
+});

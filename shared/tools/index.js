@@ -9,7 +9,7 @@ import { scanResources } from './resources.js';
 import { mineBlock, MiningError } from './mine.js';
 import { craftOne, craftOptions, CraftError } from './craft.js';
 import { inspectWorkspaces, placeTable, craftAtTable, WorkspaceError } from './workspace.js';
-import { collectItems, scanItems, CollectionError } from './collect.js';
+import { collectItems, collectNearby, scanItems, CollectionError } from './collect.js';
 import { navigateLocal, NavigationError } from './navigate.js';
 
 export class ToolRegistry {
@@ -33,7 +33,7 @@ export class ToolRegistry {
     if (toolReason && result.state === 'FAILED') result.reason = toolReason;
     if (goal.tool === 'mine' || goal.tool === 'craft') context.emit?.({ type: goal.tool === 'mine' ? 'MINING-RESULT' : 'CRAFT-RESULT', state: result.state, reason: result.reason ?? null, result: result.result ?? null });
     if (goal.tool === 'place_crafting_table' || goal.tool === 'craft_at_table') context.emit?.({ type: 'WORKSPACE-RESULT', tool: goal.tool, ...result });
-    if (goal.tool === 'collect_items') context.emit?.({ type: 'COLLECTION-RESULT', ...result });
+    if (goal.tool === 'collect_items' || goal.tool === 'collect_nearby') context.emit?.({ type: 'COLLECTION-RESULT', tool: goal.tool, ...result });
     if (goal.tool === 'navigate_local') context.emit?.({ type: 'NAVIGATION-RESULT', ...result });
     if (goal.tool === 'harvest_crop' || goal.tool === 'plant_crop') context.emit?.({ type: 'FARMING-RESULT', tool: goal.tool, ...result });
     return result;
@@ -55,6 +55,7 @@ export function createToolRegistry({ miningPolicy = { enabled: false }, workspac
   const collection = structuredClone(collectionPolicy);
   registry.register('scan_items', { readOnly: true, run: bot => scanItems(bot, collection) });
   if (collection.enabled) registry.register('collect_items', { timeoutMs: 10000, constraints: { ...permissionConstraints(collection), maxDistance: 4, maxSteps: 5 }, run: (bot, args, session) => collectItems(bot, args, collection, session) });
+  if (collection.enabled) registry.register('collect_nearby', { timeoutMs: 12000, constraints: { ...permissionConstraints(collection), maxDistance: 4, maxSteps: 5, maxTargets: 1, discoveryWaitMs: 1000 }, run: (bot, args, session) => collectNearby(bot, args, collection, session) });
   const navigation = structuredClone(navigationPolicy);
   if (navigation.enabled) registry.register('navigate_local', { timeoutMs: 15000, constraints: { ...permissionConstraints(navigation), maxDistance: 6, maxLegs: 12 }, run: (bot, args, session) => navigateLocal(bot, args, navigation, session) });
   const farming = structuredClone(farmingPolicy);

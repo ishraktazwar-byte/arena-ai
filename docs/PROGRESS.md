@@ -1,6 +1,6 @@
 # Arena AI — implementation progress
 
-Updated for V0.2.13. This is a capability ledger, not a percentage or a promise that
+Updated for V0.2.14. This is a capability ledger, not a percentage or a promise that
 all the original instructions are complete. The remaining social/economic and
 world-building systems are much larger than individual completed tools.
 
@@ -17,6 +17,9 @@ world-building systems are much larger than individual completed tools.
 - Visible resource scanning; approved-region single-block mining; independent
   approved-region dropped-item pickup with inventory evidence; guarded starter
   crafting; independently approved crafting-table placement/use.
+- V0.2.14: fresh desired-item drop binding lets short plans collect newly appeared
+  items without future entity IDs or another cloud call. A farm-edge harvest →
+  pickup → replant sequence is fixture-tested without carried planting reserves.
 - V0.2.13: guarded planting/replanting using carried reserves, empty farmland
   site observations, server seedling reports and verified seed/produce consumption.
 - V0.2.12: visible crop maturity discovery and guarded harvesting of one mature
@@ -53,7 +56,7 @@ world-building systems are much larger than individual completed tools.
 
 ## Not implemented
 
-- Soil preparation, sustainable harvest/pickup/seed-reservation loops, growing
+- Soil preparation, seed reservation and robust sustainable farming loops, growing
   management, cooking and complete food-production systems; wider building and
   settlement skills. Separate harvesting and planting/replanting skills now exist.
 - Relationships, trust/reputation, social roles and durable interpersonal memory.
@@ -62,9 +65,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.13: 381 tests passed on Ubuntu/Windows with Node 22/24. Exact implementation
-and hosted CI proof for crop planting/replanting are recorded in
-[V0.2.13.md](V0.2.13.md). These are automated/simulated and pinned API-contract tests,
+V0.2.14 verification of fresh drop selection within short plans is recorded in
+[V0.2.14.md](V0.2.14.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push

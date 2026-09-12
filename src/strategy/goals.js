@@ -1,7 +1,7 @@
 import { definitions, validArgs } from '../../shared/tools/definitions.js';
 
 // Conservative fallback for controllers without a runtime registry (e.g. tests).
-export const catalog = Object.freeze(Object.entries(definitions).filter(([name]) => !['mine', 'place_crafting_table', 'craft_at_table', 'collect_items', 'navigate_local', 'harvest_crop', 'plant_crop'].includes(name)).map(([name, definition]) => ({ name, ...definition })));
+export const catalog = Object.freeze(Object.entries(definitions).filter(([name]) => !['mine', 'place_crafting_table', 'craft_at_table', 'collect_items', 'collect_nearby', 'navigate_local', 'harvest_crop', 'plant_crop'].includes(name)).map(([name, definition]) => ({ name, ...definition })));
 export function validateGoal(value, allowedTools = Object.keys(definitions)) {
   if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Goal must be an object');
   if (Object.keys(value).sort().join(',') !== 'args,reason,tool') throw new Error('Unexpected goal fields');

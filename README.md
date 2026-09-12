@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.13 — guarded crop planting and replanting with inventory evidence.**
+**Current: V0.2.14 — fresh drop selection within short gathering plans.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -54,7 +54,7 @@ plans, general navigation, production and civilization systems remain unfinished
   remain distinct from current observations and never authorize mining.
 - A runtime tool catalog: `scan`, `scan_resources`, `craft_options`, `craft`,
   `wait`, `move_step`, `workspace_options`, opt-in `mine`,
-  `place_crafting_table`, `craft_at_table`, `scan_items` and opt-in `collect_items`—no generated JavaScript.
+  `place_crafting_table`, `craft_at_table`, `scan_items` and policy-gated `collect_items`/`collect_nearby`—no generated JavaScript.
 - Visible mature-crop discovery and guarded one-plant harvesting; immature crops
   are refused. Yield and pickup are not assumed.
 - Guarded planting/replanting on observed empty farmland cells using carried
@@ -254,7 +254,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v10 reads v1–v9 snapshots and upgrades on the next write; older releases
+Memory schema v11 reads v1–v10 snapshots and upgrades on the next write; older releases
 refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
 resource sightings share the 500-record memory budget. The planner receives at most
 eight resource memories separately from event history, with age and recheck flags.
@@ -306,8 +306,9 @@ is not a complete competent-player combat model.
 | V0.2.11 | Persistent supply intentions and fresh progress assessment | 327 |
 | V0.2.12 | Mature-crop discovery and guarded harvest | 352 |
 | V0.2.13 | Guarded planting/replanting and seed consumption evidence | 381 |
+| V0.2.14 | Fresh nearby-drop selection within short plans | 408 |
 
-See `docs/V0.2.13.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.14.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -439,3 +440,23 @@ A short planner-chosen harvest → replant sequence can use carried reserves, bu
 harvested drops are not automatically recovered or reserved. Sustainable farming,
 soil preparation, cooking and general farmland navigation remain unfinished.
 See [V0.2.13 notes](docs/V0.2.13.md). Live testing remains deferred.
+
+## V0.2.14 fresh drop selection
+
+`collect_nearby {expectedItem}` selects one freshly observed eligible nearby stack
+of the named item during execution. A short plan can therefore harvest or mine,
+then request pickup without inventing a future entity ID or waiting for another
+cloud request. The agent still chooses whether to include this step; no fixed
+farming routine is imposed.
+
+Discovery waits up to one second, then binds a stable entity ID/UUID and delegates
+to the existing guarded collector. It retains collection permission, healthy-body,
+flat-ground and empty-inventory-slot requirements. Success requires a server pickup
+report and authoritative inventory gain. There is no retargeting after a failed
+attempt and no guarantee the selected item came from the preceding harvest/mine.
+
+An automated integration test runs harvest → fresh pickup → replant from one
+provider response, with no carried planting reserve. This uses a conveniently
+reachable farm-edge drop, not general farmland traversal. Seed reservation,
+recovery after partial plans, multiple yield stacks and sustainable farm management
+remain unfinished. Details: [V0.2.14 notes](docs/V0.2.14.md). No live testing performed.
