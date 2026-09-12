@@ -56,8 +56,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.10 baseline: 304 tests passed on Ubuntu/Windows with Node 22/24. V0.2.11
-verification of persistent supply objectives is recorded in
+V0.2.11: 327 tests passed on Ubuntu/Windows with Node 22/24. Exact implementation
+and hosted CI proof for persistent supply objectives are recorded in
 [V0.2.11.md](V0.2.11.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
