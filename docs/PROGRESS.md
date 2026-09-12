@@ -1,6 +1,6 @@
 # Arena AI — implementation progress
 
-Updated for V0.2.7. This is a capability ledger, not a percentage or a promise that
+Updated for V0.2.8. This is a capability ledger, not a percentage or a promise that
 all the original instructions are complete. The remaining social/economic and
 world-building systems are much larger than individual completed tools.
 
@@ -17,6 +17,8 @@ world-building systems are much larger than individual completed tools.
 - Visible resource scanning; approved-region single-block mining; independent
   approved-region dropped-item pickup with inventory evidence; guarded starter
   crafting; independently approved crafting-table placement/use.
+- V0.2.8: independently approved six-block local routing around known obstacles,
+  with twelve-leg/time budgets and safety checks during movement.
 - V0.2.7: bounded persistent resource sightings with world/dimension isolation,
   age limits, duplicate-cell updates and explicit current-vs-historical status.
 - Windows CMD setup instructions, local-only secrets and one tested/pushed release
@@ -26,8 +28,8 @@ world-building systems are much larger than individual completed tools.
 
 - Survival/combat is conservative, not complete: ranged combat, shield tactics,
   broader hazards, sophisticated recovery and equipment policies remain.
-- Movement consists of short checked ground steps, not general navigation or
-  obstacle-aware long-distance gathering.
+- Movement now includes bounded obstacle-aware local flat-ground routes, not
+  general navigation, stairs, jumps or long-distance gathering.
 - Gathering has bounded component tools, not a complete autonomous supply chain.
   Crafting covers a starter subset, not full recipes, smelting or food production.
 - Needs are advisory thresholds, not learned motivations. Resource memory is a
@@ -46,9 +48,9 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.7: 236 tests passed on Ubuntu/Windows with Node 22/24, including resource-memory
-regressions. Exact implementation and hosted CI proof are recorded in
-[V0.2.7.md](V0.2.7.md). These are automated/simulated and pinned API-contract tests,
+V0.2.7 baseline: 236 tests passed on Ubuntu/Windows with Node 22/24. V0.2.8 adds
+local-navigation regression tests; exact implementation and verification are in
+[V0.2.8.md](V0.2.8.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push

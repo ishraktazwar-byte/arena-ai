@@ -32,9 +32,9 @@ export function observe(bot, { workspacePolicy = { enabled: false }, collectionP
   return observation;
 }
 
-export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false } } = {}) {
+export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, navigationPolicy = { enabled: false } } = {}) {
   let ready = false;
-  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy, collectionPolicy });
+  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy });
   const observeBody = body => observe(body, { workspacePolicy, collectionPolicy });
   const remember = (kind, observation) => {
     if (memory) void memory.remember(kind, observation).catch(() => emit({ type: 'MEMORY-ERROR', code: 'memory_write_failed' }));

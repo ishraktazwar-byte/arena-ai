@@ -3,6 +3,7 @@ import { craftItems } from './craft.js';
 export const definitions = Object.freeze({
   scan: { description: 'Observe health, inventory, entities and visible nearby resources.', args: {} },
   wait: { description: 'Wait briefly while local survival remains active.', args: { durationMs: 'integer 100..5000' } },
+  navigate_local: { description: 'Navigate to the center of an empty x,z cell on the current floor, within six blocks and the approved navigation area. Known flat terrain only; at most twelve short legs. Does not mine, jump or collect intentionally.', args: { x: 'integer block coordinate', z: 'integer block coordinate' } },
   move_step: { description: 'Walk one bounded cardinal step on validated flat ground.', args: { direction: 'north|south|east|west' } },
   scan_resources: { description: 'List at most 16 line-of-sight resource blocks within four blocks; does not move or mine.', args: {} },
   craft_options: { description: 'List bounded starter recipes available in main inventory; indicate recipes needing an open crafting-table window.', args: {} },
@@ -18,6 +19,7 @@ export function validArgs(tool, args) {
   if (!args || Array.isArray(args) || typeof args !== 'object') return false;
   const keys = Object.keys(args).sort().join(',');
   if (tool === 'scan' || tool === 'scan_resources' || tool === 'craft_options' || tool === 'workspace_options' || tool === 'scan_items') return keys === '';
+  if (tool === 'navigate_local') return keys === 'x,z' && ['x', 'z'].every(key => Number.isInteger(args[key]) && Math.abs(args[key]) <= 30000000);
   if (tool === 'wait') return keys === 'durationMs' && Number.isInteger(args.durationMs) && args.durationMs >= 100 && args.durationMs <= 5000;
   if (tool === 'move_step') return keys === 'direction' && ['north', 'south', 'east', 'west'].includes(args.direction);
   if (tool === 'craft') return keys === 'item' && craftItems.includes(args.item);

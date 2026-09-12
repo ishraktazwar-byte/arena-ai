@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.7 — persistent, scoped resource sightings with explicit recheck requirements.**
+**Current: V0.2.8 — approved-area bounded local navigation on known flat terrain.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -11,6 +11,8 @@ An autonomous Minecraft-agent platform under development.
 - Alice/Bob profiles and a persistent Mineflayer body.
 - Action ownership, cancellation, timeouts and stale-command guards.
 - Basic eating, conservative risk gates and bounded flat-ground escape.
+- Independently opt-in `navigate_local`: obstacle-aware routing on known flat terrain,
+  with live step rechecks and strict distance/time/leg limits.
 - Stable melee targets, equipment selection, safe approach and final attack checks.
 - Persistent local observations, deaths and goal outcomes with bounded retrieval.
 - Bounded resource-location memory, scoped by world/dimension; historical sightings
@@ -211,7 +213,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v6 reads v1–v5 snapshots and upgrades on the next write; older releases
+Memory schema v7 reads v1–v6 snapshots and upgrades on the next write; older releases
 refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
 resource sightings share the 500-record memory budget. The planner receives at most
 eight resource memories separately from event history, with age and recheck flags.
@@ -257,8 +259,9 @@ is not a complete competent-player combat model.
 | V0.2.5 | Approved dropped-item collection and pickup verification | 191 |
 | V0.2.6 | Needs-aware planning and failed-action cooldowns | 215 |
 | V0.2.7 | Persistent resource sightings and scoped recall | 236 |
+| V0.2.8 | Bounded local navigation with guarded route execution | 259 |
 
-See `docs/V0.2.7.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.8.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -307,3 +310,18 @@ evict them earlier. Reset `MC_WORLD_ID` after a world reset to isolate old knowl
 No shared cross-agent map or travel/navigation skill is added in this version.
 
 See [V0.2.7 notes](docs/V0.2.7.md) and the [implementation progress ledger](docs/PROGRESS.md).
+
+## V0.2.8 local navigation
+
+`navigate_local` is absent by default. To allow it, set `MC_NAVIGATION_ENABLED=true`,
+`MC_NAVIGATION_DIMENSION=overworld` and six integer bounds in `MC_NAVIGATION_AREA`
+for an owner-approved flat area, including the feet Y level. It targets an empty
+cell center within six blocks, not the inside of a remembered resource block.
+The tool searches known same-floor cells, routes around obstacles and rechecks
+each short movement. Unknown terrain, cliffs, stairs, jumps and digging are excluded.
+
+This permission applies only to the new tool; it is not a global movement fence
+for emergency survival, `move_step` or operator actions. It grants no mining or
+collection permission. Automatic Minecraft pickups may still occur while walking.
+Arrival is a local position estimate, not server-confirmed position or resource
+availability. See [V0.2.8 notes](docs/V0.2.8.md). Live testing remains deferred.

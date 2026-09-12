@@ -15,7 +15,8 @@ export function parseConfig(env, agent) {
   const miningPolicy = parseAreaPolicy(env, 'MC_MINING');
   const workspacePolicy = parseAreaPolicy(env, 'MC_WORKSPACE');
   const collectionPolicy = parseAreaPolicy(env, 'MC_COLLECTION');
-  return { miningPolicy, workspacePolicy, collectionPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
+  const navigationPolicy = parseAreaPolicy(env, 'MC_NAVIGATION');
+  return { miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
 }
 
 function parseAreaPolicy(env, prefix) {

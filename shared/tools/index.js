@@ -7,6 +7,7 @@ import { mineBlock, MiningError } from './mine.js';
 import { craftOne, craftOptions, CraftError } from './craft.js';
 import { inspectWorkspaces, placeTable, craftAtTable, WorkspaceError } from './workspace.js';
 import { collectItems, scanItems, CollectionError } from './collect.js';
+import { navigateLocal, NavigationError } from './navigate.js';
 
 export class ToolRegistry {
   constructor() { this.tools = new Map(); }
@@ -24,16 +25,17 @@ export class ToolRegistry {
     let toolReason;
     const result = await arbiter.run('strategy', 100, async session => {
       try { return await tool.run(bot, goal.args, session, { ...context, arbiter }); }
-      catch (error) { if (error instanceof MiningError || error instanceof CraftError || error instanceof WorkspaceError || error instanceof CollectionError) toolReason = error.code; throw error; }
+      catch (error) { if (error instanceof MiningError || error instanceof CraftError || error instanceof WorkspaceError || error instanceof CollectionError || error instanceof NavigationError) toolReason = error.code; throw error; }
     }, tool.timeoutMs);
     if (toolReason && result.state === 'FAILED') result.reason = toolReason;
     if (goal.tool === 'mine' || goal.tool === 'craft') context.emit?.({ type: goal.tool === 'mine' ? 'MINING-RESULT' : 'CRAFT-RESULT', state: result.state, reason: result.reason ?? null, result: result.result ?? null });
     if (goal.tool === 'place_crafting_table' || goal.tool === 'craft_at_table') context.emit?.({ type: 'WORKSPACE-RESULT', tool: goal.tool, ...result });
     if (goal.tool === 'collect_items') context.emit?.({ type: 'COLLECTION-RESULT', ...result });
+    if (goal.tool === 'navigate_local') context.emit?.({ type: 'NAVIGATION-RESULT', ...result });
     return result;
   }
 }
-export function createToolRegistry({ miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false } } = {}) {
+export function createToolRegistry({ miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, navigationPolicy = { enabled: false } } = {}) {
   const registry = new ToolRegistry();
   registry.register('scan', { readOnly: true, run: (bot, args, session, { observe }) => ({ observation: observe(bot) }) });
   registry.register('scan_resources', { readOnly: true, run: bot => ({ resources: scanResources(bot) }) });
@@ -49,6 +51,8 @@ export function createToolRegistry({ miningPolicy = { enabled: false }, workspac
   const collection = structuredClone(collectionPolicy);
   registry.register('scan_items', { readOnly: true, run: bot => scanItems(bot, collection) });
   if (collection.enabled) registry.register('collect_items', { timeoutMs: 10000, constraints: { dimension: collection.dimension, area: collection.area, maxDistance: 4, maxSteps: 5 }, run: (bot, args, session) => collectItems(bot, args, collection, session) });
+  const navigation = structuredClone(navigationPolicy);
+  if (navigation.enabled) registry.register('navigate_local', { timeoutMs: 15000, constraints: { dimension: navigation.dimension, area: navigation.area, maxDistance: 6, maxLegs: 12 }, run: (bot, args, session) => navigateLocal(bot, args, navigation, session) });
   registry.register('wait', { timeoutMs: 5500, run: (bot, args, { signal }) => delay(args.durationMs, undefined, { signal }) });
   registry.register('move_step', { timeoutMs: 1200, run: async (bot, args, session, { emit = () => {} }) => {
     const position = bot.entity?.position;
