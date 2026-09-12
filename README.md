@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.9 — autonomous-world operation without per-area approvals.**
+**Current: V0.2.10 — bounded multi-step planning with per-step rechecks.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -64,6 +64,8 @@ plans, general navigation, production and civilization systems remain unfinished
 - Advisory safety, recovery, nutrition, food reserve, inventory-space and gathering-tool
   needs; exact failed-action cooldowns prevent immediate repetition without scripting
   a fixed progression or expanding tool permissions.
+- Optional plans of up to four typed actions per planning request, re-observed
+  between steps; failure or interruption discards the tail rather than replaying it.
 - Optional OpenRouter free-router planning, timeout/retry handling and a shared
   daily request budget. With AI off/unavailable, strategy falls back to scanning;
   local eating, combat and escape do not need an API key.
@@ -294,8 +296,9 @@ is not a complete competent-player combat model.
 | V0.2.7 | Persistent resource sightings and scoped recall | 236 |
 | V0.2.8 | Bounded local navigation with guarded route execution | 259 |
 | V0.2.9 | Autonomous-world scope with optional restricted deployment | 281 |
+| V0.2.10 | Bounded multi-step planning and step revalidation | 304 |
 
-See `docs/V0.2.9.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.10.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -359,3 +362,19 @@ for emergency survival, `move_step` or operator actions. It grants no mining or
 collection permission. Automatic Minecraft pickups may still occur while walking.
 Arrival is a local position estimate, not server-confirmed position or resource
 availability. See [V0.2.8 notes](docs/V0.2.8.md). Live testing remains deferred.
+
+## V0.2.10 short plans
+
+The planner may return one typed goal or a sequence of one to four goals. Every
+step must belong to the active catalog; the body re-observes and checks the next
+action before executing it. Failed, blocked, cancelled or cooling-down steps stop
+the plan. New danger, missing vitals, hunger, health loss, a dimension change or
+lifecycle invalidation also prevents follow-up steps.
+
+A sixty-second admission window limits when another step may begin; an action
+already running retains its own tool timeout, up to fifteen seconds. Plans are
+not stored or resumed after death/restart. Only actual outcomes enter memory.
+There are no loops, generated code or invented future entity IDs. One request
+can support several compatible skills without an extra cloud call per step, but
+request budgets, free-only routing and the 400-token response limit are unchanged.
+See [V0.2.10 notes](docs/V0.2.10.md). This is not yet durable long-term planning.

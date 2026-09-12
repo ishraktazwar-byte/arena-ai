@@ -1,6 +1,6 @@
 # Arena AI — implementation progress
 
-Updated for V0.2.9. This is a capability ledger, not a percentage or a promise that
+Updated for V0.2.10. This is a capability ledger, not a percentage or a promise that
 all the original instructions are complete. The remaining social/economic and
 world-building systems are much larger than individual completed tools.
 
@@ -17,6 +17,8 @@ world-building systems are much larger than individual completed tools.
 - Visible resource scanning; approved-region single-block mining; independent
   approved-region dropped-item pickup with inventory evidence; guarded starter
   crafting; independently approved crafting-table placement/use.
+- V0.2.10: cloud-selected plans of up to four typed steps with re-observation,
+  full permission validation and fail-stop/lifecycle-invalidated tails.
 - V0.2.9: one-time autonomous-world deployment makes all implemented gathering,
   navigation and workspace mutations available without per-area setup; restricted
   mode remains optional for shared servers. This is not complete strategic autonomy.
@@ -37,8 +39,9 @@ world-building systems are much larger than individual completed tools.
   Crafting covers a starter subset, not full recipes, smelting or food production.
 - Needs are advisory thresholds, not learned motivations. Resource memory is a
   sparse sighting index, not a complete terrain/resource map or ownership model.
-- Typed single-action goals exist; reusable long-horizon plans, learned skills and
-  resilient multi-step task orchestration are not complete.
+- Typed single actions and bounded ephemeral multi-step plans exist; durable
+  long-horizon plans, learned skills and recovery/replanning orchestration remain
+  incomplete. Plans do not resume automatically after interruption.
 - Two starter profiles exist. The requested larger population, social coordination
   and genuinely interacting civilizations are not yet implemented.
 
@@ -51,9 +54,9 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.9: 281 tests passed on Ubuntu/Windows with Node 22/24. Exact implementation
-and hosted CI proof for autonomous and restricted deployment are recorded in
-[V0.2.9.md](V0.2.9.md). These are automated/simulated and pinned API-contract tests,
+V0.2.9 baseline: 281 tests passed on Ubuntu/Windows with Node 22/24. V0.2.10
+verification of bounded multi-step planning is recorded in
+[V0.2.10.md](V0.2.10.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push

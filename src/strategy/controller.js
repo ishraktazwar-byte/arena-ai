@@ -1,5 +1,6 @@
 import { catalog, validateGoal } from './goals.js';
 import { AttemptLedger } from './attempts.js';
+import { decisionSteps } from './plans.js';
 
 export class StrategyController {
   constructor({ provider, identity, observe, execute, emit, intervalMs = 300000, now = Date.now, memory = null, toolRegistry = null }) {
@@ -55,31 +56,51 @@ export class StrategyController {
       }
       // A safe read-only fallback does not invent long-term goals or movement.
       const proposed = goal || { tool: 'scan', args: {}, reason: 'Observe while cloud planning is unavailable.' };
-      goal = this.toolRegistry ? this.toolRegistry.validate(proposed) : validateGoal(proposed, catalog.map(tool => tool.name));
+      const allowedTools = this.toolRegistry ? this.toolRegistry.catalog().map(tool => tool.name) : catalog.map(tool => tool.name);
+      const steps = decisionSteps(proposed, allowedTools);
       const current = this.observe();
       const moved = observation.position && current.position && Math.hypot(current.position.x - observation.position.x, current.position.y - observation.position.y, current.position.z - observation.position.z) > 2;
       if (!this.active || epoch !== this.epoch || this.now() - started > 30000 || current.dimension !== observation.dimension || moved || current.health < observation.health) {
         this.emit({ type: 'STRATEGY-DISCARD', reason: 'stale_context' }); return;
       }
-      const retryAfterMs = this.attempts.remaining(goal, current);
-      if (retryAfterMs > 0) {
-        this.emit({ type: 'STRATEGY-DEFER', tool: goal.tool, reason: 'attempt_cooldown', retryAfterMs });
-        goal = { tool: 'scan', args: {}, reason: 'Observe instead of repeating a recently unsuccessful action.' };
-        goal = this.toolRegistry ? this.toolRegistry.validate(goal) : validateGoal(goal, catalog.map(tool => tool.name));
-        source = 'local_cooldown';
+      if (steps.length > 1) this.emit({ type: 'STRATEGY-PLAN', steps: steps.length });
+      // Plans are ephemeral: no queue is kept after this tick, death or restart.
+      // The 60-second deadline bounds admission of further steps; an already
+      // running action retains its own (at most 15-second) arbiter timeout.
+      for (let index = 0; index < steps.length; index++) {
+        if (!this.active || epoch !== this.epoch) return;
+        const stepObservation = index === 0 ? current : this.observe();
+        if (index > 0 && (this.now() < started || this.now() - started >= 60000 || stepObservation.dimension !== observation.dimension || !Number.isFinite(stepObservation.health) || !Number.isFinite(stepObservation.food) || stepObservation.food < 12 || stepObservation.health < observation.health || stepObservation.risk?.mode !== 'NORMAL')) {
+          this.emit({ type: 'STRATEGY-PLAN-STOP', reason: 'context_changed', completedSteps: index }); return;
+        }
+        goal = this.toolRegistry ? this.toolRegistry.validate(steps[index]) : validateGoal(steps[index], catalog.map(tool => tool.name));
+        const retryAfterMs = this.attempts.remaining(goal, stepObservation);
+        let deferred = false;
+        if (retryAfterMs > 0) {
+          this.emit({ type: 'STRATEGY-DEFER', tool: goal.tool, reason: 'attempt_cooldown', retryAfterMs });
+          goal = { tool: 'scan', args: {}, reason: 'Observe instead of repeating a recently unsuccessful action.' };
+          goal = this.toolRegistry ? this.toolRegistry.validate(goal) : validateGoal(goal, catalog.map(tool => tool.name));
+          deferred = true;
+        }
+        this.emit({ type: 'STRATEGY-GOAL', tool: goal.tool, source: deferred ? 'local_cooldown' : source });
+        let result;
+        try { result = await this.execute(goal); }
+        catch { result = { state: 'FAILED', reason: 'execution_exception' }; }
+        if (this.active && epoch === this.epoch) this.attempts.record(goal, stepObservation, result.state);
+        // Only actually attempted steps become historical outcomes, never the
+        // plan's unexecuted tail or arbitrary model rationale.
+        await this.remember('goal_result', epoch === this.epoch ? this.observe() : stepObservation, { tool: goal.tool, state: result.state });
+        if (!this.active || epoch !== this.epoch) return;
+        const record = { at: this.now(), tool: goal.tool, state: result.state };
+        this.recent.push(record);
+        if (this.recent.length > 30) this.recent.shift();
+        this.emit({ type: 'STRATEGY-RESULT', ...record });
+        if (deferred || result.state !== 'COMPLETED') {
+          if (steps.length > 1) this.emit({ type: 'STRATEGY-PLAN-STOP', reason: deferred ? 'attempt_cooldown' : 'step_not_completed', completedSteps: index });
+          return;
+        }
       }
-      this.emit({ type: 'STRATEGY-GOAL', tool: goal.tool, source }); // Never log raw model text.
-      let result;
-      try { result = await this.execute(goal); }
-      catch { result = { state: 'FAILED', reason: 'execution_exception' }; }
-      if (this.active && epoch === this.epoch) this.attempts.record(goal, current, result.state);
-      // Interrupted goals remain historical outcomes, not resumable commands.
-      await this.remember('goal_result', epoch === this.epoch ? this.observe() : observation, { tool: goal.tool, state: result.state });
-      if (!this.active || epoch !== this.epoch) return;
-      const record = { at: this.now(), tool: goal.tool, state: result.state };
-      this.recent.push(record);
-      if (this.recent.length > 30) this.recent.shift();
-      this.emit({ type: 'STRATEGY-RESULT', ...record });
+      if (steps.length > 1) this.emit({ type: 'STRATEGY-PLAN-COMPLETE', steps: steps.length });
     } catch {
       this.emit({ type: 'STRATEGY-ERROR', code: 'planning_or_execution_failed' });
     } finally { this.busy = false; this.controller = null; }
