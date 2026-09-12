@@ -1,3 +1,4 @@
+import { planEscape, executeEscape, worldReader } from './escape.js';
 // Conservative policy, not a complete Minecraft danger model.
 const HOSTILES = new Set(['zombie', 'husk', 'drowned', 'zombie_villager', 'skeleton', 'stray', 'bogged', 'spider', 'cave_spider', 'pillager', 'vindicator', 'ravager', 'witch', 'creeper', 'silverfish', 'endermite', 'phantom', 'blaze', 'wither_skeleton', 'hoglin', 'zoglin']);
 const HAZARDS = new Set(['lava', 'fire', 'soul_fire', 'magma_block', 'cactus', 'sweet_berry_bush', 'powder_snow', 'wither_rose']);
@@ -12,7 +13,7 @@ export function survivalSnapshot(bot) {
     health: bot.health, food: bot.food, oxygen: bot.oxygenLevel,
     hazardousBlock: blocks.find(block => HAZARDS.has(block?.name))?.name ?? null,
     entities: position ? Object.values(bot.entities || {}).filter(entity => entity !== bot.entity && entity.position).map(entity => ({
-      id: entity.id, name: entity.name, distance: entity.position.distanceTo(position)
+      id: entity.id, name: entity.name, position: { x: entity.position.x, y: entity.position.y, z: entity.position.z }, distance: entity.position.distanceTo(position)
     })) : [],
     items: bot.inventory?.items() ?? []
   };
@@ -43,13 +44,16 @@ export class SurvivalController {
     Object.assign(this, { bot, arbiter, emit, now, recoveryMs, retryMs });
     this.active = false;
     this.busy = false;
+    this.escaping = false;
+    this.nextEscapeAt = 0;
+    this.lastEscapeDiagnostic = null;
     this.generation = 0;
     this.nextEatAt = 0;
     this.releaseAt = 0;
     this.floor = 0;
     this.lastDiagnostic = '';
   }
-  start() { this.active = true; this.generation++; this.nextEatAt = 0; this.releaseAt = 0; this.floor = 0; this.lastDiagnostic = ''; }
+  start() { this.active = true; this.generation++; this.nextEatAt = 0; this.nextEscapeAt = 0; this.lastEscapeDiagnostic = null; this.releaseAt = 0; this.floor = 0; this.lastDiagnostic = ''; }
   stop() {
     this.active = false;
     this.generation++;
@@ -73,7 +77,37 @@ export class SurvivalController {
     const diagnostic = `${risk.mode}:${risk.reason}:${this.floor}:${hungry && !item ? 'no_food' : 'food_ok'}`;
     if (diagnostic !== this.lastDiagnostic) {
       this.lastDiagnostic = diagnostic;
-      this.emit({ type: 'SURVIVAL-DIAG', ...risk, enforcedFloor: this.floor, foodAvailable: !!item, response: this.floor >= 1000 ? 'halt_only_escape_not_implemented' : 'reassess' });
+      this.emit({ type: 'SURVIVAL-DIAG', ...risk, enforcedFloor: this.floor, foodAvailable: !!item, response: this.floor >= 1000 ? 'ground_escape_if_supported_otherwise_halt' : 'reassess' });
+    }
+    const needsEscape = risk.reason === 'close_creeper' || (risk.reason === 'critical_health' && unsafeToEat);
+    if (this.arbiter.current?.owner === 'survival-escape' && (!needsEscape || ['hazardous_block', 'low_oxygen', 'dead', 'unknown_vitals'].includes(risk.reason))) this.arbiter.cancel('escape_no_longer_applicable');
+    if (needsEscape && !this.escaping && now >= this.nextEscapeAt) {
+      const threats = snapshot.entities.filter(e => HOSTILES.has(e.name) && e.distance <= 12);
+      const plan = planEscape({ position: this.bot.entity?.position, onGround: this.bot.entity?.onGround, blockAt: worldReader(this.bot), threats });
+      if (plan.state === 'PLANNED') {
+        const generation = this.generation;
+        this.escaping = true;
+        this.nextEscapeAt = now + 800;
+        void this.arbiter.run('survival-escape', 1000, session => executeEscape(this.bot, plan.destination, session, {
+          stillNeeded: () => {
+            if (!this.active || generation !== this.generation) return false;
+            const current = survivalSnapshot(this.bot);
+            const currentRisk = assessRisk(current);
+            if (!['close_creeper', 'critical_health'].includes(currentRisk.reason)) return false;
+            const position = this.bot.entity?.position;
+            const nearby = current.entities.filter(e => HOSTILES.has(e.name) && e.distance <= 12);
+            if (!position || !nearby.length) return false;
+            const separation = p => Math.min(...nearby.map(e => Math.hypot(p.x - e.position.x, p.z - e.position.z)));
+            return separation(plan.destination) >= separation(position);
+          }
+        }), 1000).then(result => {
+          if (this.active && generation === this.generation) this.emit({ type: 'ESCAPE-RESULT', destination: plan.destination, ...result });
+        }).finally(() => { this.escaping = false; });
+      } else {
+        this.nextEscapeAt = now + 1000;
+        if (plan.reason !== this.lastEscapeDiagnostic) this.emit({ type: 'ESCAPE-BLOCKED', reason: plan.reason });
+      }
+      this.lastEscapeDiagnostic = plan.reason || null;
     }
     if (this.busy || this.floor > 700 || unsafeToEat || !hungry || !item || now < this.nextEatAt) return;
     const generation = this.generation;

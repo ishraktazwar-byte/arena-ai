@@ -1,9 +1,9 @@
 # Arena AI
 
-Minecraft civilization experiment. **V0.1.1 — local risk gates and basic eating (offline-tested).**
+Minecraft civilization experiment. **V0.1.2 — bounded ground escape and basic eating (offline-tested).**
 
-LLM chooses goals; the local body executes them safely. This release has basic automatic eating and emergency interruption, but no LLM,
-escape navigation, combat, reconnect loop, or idle-shutdown avoidance.
+LLM chooses goals; the local body executes them safely. This release has basic automatic eating, emergency interruption, and conservative
+one-block ground escape. It has no LLM, combat, reconnect loop, or idle-shutdown avoidance.
 Do not leave these agents unattended in survival mode yet.
 
 ## Windows CMD setup
@@ -42,8 +42,9 @@ Never distribute either in ZIPs. Run from the project directory.
 
 `npm run check` checks syntax. `npm test` covers configuration, action ownership,
 preemption, timeout, stale callbacks, cleanup, and death/respawn behavior with a
-simulated body. See `docs/V0.1.1.md` for current validation and limitations;
+simulated body. See `docs/V0.1.2.md` for current validation and limitations;
 `docs/V0.1.0.md` records the unresolved live connection issue.
 
-Emergency halt only interrupts unsafe ongoing work. It does **not** get the bot
-out of lava, away from a creeper, or to the surface. Stay supervised.
+Ground escape requires known, flat, full-block support and a safer adjacent step.
+It does **not** escape lava or drowning and is not guaranteed to outrun a creeper.
+Unknown or unsafe terrain causes a halt. Stay supervised.

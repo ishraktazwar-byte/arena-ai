@@ -26,7 +26,7 @@ try {
   bot.on('end', () => terminal.close());
   process.once('SIGINT', close);
   process.once('SIGTERM', close);
-  emit({ type: 'START', version: '0.1.1', message: 'Commands: status, step, stop, quit. Basic eating and emergency halt only; escape/combat not implemented.' });
+  emit({ type: 'START', version: '0.1.2', message: 'Commands: status, step, stop, quit. Basic eating and bounded ground escape; no combat or full survival.' });
 } catch (error) {
   console.error(`Startup failed: ${error.code === 'ENOENT' ? 'Agent configuration not found' : error.message}`);
   process.exitCode = 1;
