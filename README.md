@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.12 — mature-crop discovery and guarded harvesting.**
+**Current: V0.2.13 — guarded crop planting and replanting with inventory evidence.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -19,7 +19,7 @@ AI_ENABLED=true
 
 Keep the OpenRouter key only in local `.env`, as described below. The existing
 free-only provider and shared request budget remain unchanged. This mode exposes
-all implemented navigation, mining, collection, mature-crop harvesting and crafting-workspace skills in
+all implemented navigation, mining, collection, crop harvesting/planting and crafting-workspace skills in
 the Overworld, Nether and End **without drawing or approving individual areas**.
 The planner selects actions; there is no per-action approval prompt or fixed
 house/farm/king sequence. Bounded attempts and local survival checks still apply.
@@ -56,7 +56,9 @@ plans, general navigation, production and civilization systems remain unfinished
   `wait`, `move_step`, `workspace_options`, opt-in `mine`,
   `place_crafting_table`, `craft_at_table`, `scan_items` and opt-in `collect_items`—no generated JavaScript.
 - Visible mature-crop discovery and guarded one-plant harvesting; immature crops
-  are refused. Yield, pickup and replanting are not assumed.
+  are refused. Yield and pickup are not assumed.
+- Guarded planting/replanting on observed empty farmland cells using carried
+  reserves, a server-reported seedling and verified inventory consumption.
 - Visible nearby resource observations and region-limited single-block mining
   with equipment, geometry, cancellation and server-confirmation checks.
 - Single-batch starter crafting with guarded clicks, bounded waits and
@@ -252,7 +254,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v9 reads v1–v8 snapshots and upgrades on the next write; older releases
+Memory schema v10 reads v1–v9 snapshots and upgrades on the next write; older releases
 refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
 resource sightings share the 500-record memory budget. The planner receives at most
 eight resource memories separately from event history, with age and recheck flags.
@@ -303,8 +305,9 @@ is not a complete competent-player combat model.
 | V0.2.10 | Bounded multi-step planning and step revalidation | 304 |
 | V0.2.11 | Persistent supply intentions and fresh progress assessment | 327 |
 | V0.2.12 | Mature-crop discovery and guarded harvest | 352 |
+| V0.2.13 | Guarded planting/replanting and seed consumption evidence | 381 |
 
-See `docs/V0.2.12.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.13.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -418,3 +421,21 @@ known vitals, health at least 8, NORMAL risk and safe footing. Collection and ot
 skills retain their existing separate preconditions. Replanting, soil preparation,
 cooking and a complete food-production loop remain unfinished. See
 [V0.2.12 notes](docs/V0.2.12.md). No live testing is requested at this stage.
+
+## V0.2.13 planting and replanting
+
+`plant_crop` plants one supported crop above existing farmland, using carried
+wheat seeds, carrots, potatoes or beetroot seeds as appropriate. Crop scans now
+include up to eight observed empty farmland sites and carried planting-item options.
+A site observation is not a guarantee that planting remains safe or feasible.
+
+The skill checks the empty target, soil, body and hand before interacting, and
+requires both a server-reported age-zero plant and a raw inventory decrease of
+one planting item. It never overwrites an occupied cell, tills soil, moves onto
+farmland, or invents seeds. Autonomous-world farming scope includes it directly;
+restricted mode uses the existing farming permission, not another approval setting.
+
+A short planner-chosen harvest → replant sequence can use carried reserves, but
+harvested drops are not automatically recovered or reserved. Sustainable farming,
+soil preparation, cooking and general farmland navigation remain unfinished.
+See [V0.2.13 notes](docs/V0.2.13.md). Live testing remains deferred.

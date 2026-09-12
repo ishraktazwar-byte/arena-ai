@@ -4,6 +4,7 @@ import { safeFootprint, worldReader } from '../../src/escape.js';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
 import { readBlock, visibleResource, sameBlock, isAir } from './resources.js';
 
+export const cropSeeds = Object.freeze({ wheat: 'wheat_seeds', carrots: 'carrot', potatoes: 'potato', beetroots: 'beetroot_seeds' });
 export const cropAges = Object.freeze({ wheat: 7, carrots: 7, potatoes: 7, beetroots: 3 });
 export class FarmingError extends Error { constructor(code) { super(code); this.code = code; } }
 const fail = code => { throw new FarmingError(code); };
@@ -42,10 +43,15 @@ export function checkHarvest(bot, args, policy, expectedState, soilState) {
   return { block, soil };
 }
 export function scanCrops(bot, policy = { enabled: false }) {
-  const result = { enabled: !!policy.enabled, crops: [] }, p = bot.entity?.position;
+  const result = { enabled: !!policy.enabled, crops: [], plantingSites: [] }, p = bot.entity?.position;
   if (!p?.offset || !bot.blockAt || !['x', 'y', 'z'].every(key => Number.isFinite(p[key]) && Math.abs(p[key]) <= 30000000)) return result;
   for (let dx = -4; dx <= 4; dx++) for (let dy = -1; dy <= 3; dy++) for (let dz = -4; dz <= 4; dz++) {
     const block = readBlock(bot, { x: Math.floor(p.x) + dx, y: Math.floor(p.y) + dy, z: Math.floor(p.z) + dz });
+    if (isAir(block) && readBlock(bot, { x: block.position.x, y: block.position.y - 1, z: block.position.z })?.name === 'farmland' && visibleResource(bot, block)) {
+      const position = { x: block.position.x, y: block.position.y, z: block.position.z };
+      const seedOptions = Object.entries(cropSeeds).filter(([, seed]) => bot.inventory?.slots?.slice(9, 45).some(item => item?.name === seed && item.count > 0)).map(([crop]) => crop);
+      result.plantingSites.push({ position, authorized: permitsBlock(policy, bot.game?.dimension, position), seedOptions, executionRecheckRequired: true, distance: p.distanceTo(block.position.offset(0.5, 0.5, 0.5)) });
+    }
     const age = cropAge(block);
     if (age === null || !visibleResource(bot, block)) continue;
     const position = { x: block.position.x, y: block.position.y, z: block.position.z };
@@ -58,6 +64,8 @@ export function scanCrops(bot, policy = { enabled: false }) {
   }
   result.crops.sort((a, b) => a.distance - b.distance);
   result.crops = result.crops.slice(0, 16);
+  result.plantingSites.sort((a, b) => a.distance - b.distance);
+  result.plantingSites = result.plantingSites.slice(0, 8);
   return result;
 }
 function bounded(promise, signal, ms, code) {
@@ -123,3 +131,5 @@ export async function harvestCrop(bot, args, policy, session, { confirmationMs =
     try { session.guard(() => bot.stopDigging()); } catch { /* New owner controls cleanup after interruption. */ }
   }
 }
+
+export { checkBody as checkFarmBody, checkSite as checkFarmSite, bounded as boundedFarm };
