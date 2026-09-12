@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.6 — needs-aware planning and bounded failed-action retry protection.**
+**Current: V0.2.7 — persistent, scoped resource sightings with explicit recheck requirements.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -13,6 +13,8 @@ An autonomous Minecraft-agent platform under development.
 - Basic eating, conservative risk gates and bounded flat-ground escape.
 - Stable melee targets, equipment selection, safe approach and final attack checks.
 - Persistent local observations, deaths and goal outcomes with bounded retrieval.
+- Bounded resource-location memory, scoped by world/dimension; historical sightings
+  remain distinct from current observations and never authorize mining.
 - A runtime tool catalog: `scan`, `scan_resources`, `craft_options`, `craft`,
   `wait`, `move_step`, `workspace_options`, opt-in `mine`,
   `place_crafting_table`, `craft_at_table`, `scan_items` and opt-in `collect_items`—no generated JavaScript.
@@ -33,7 +35,7 @@ An autonomous Minecraft-agent platform under development.
 
 **This is not a finished civilization simulation or live-validated survival bot.**
 There is no ranged combat, shield tactic, complete gathering workflow, farming,
-settlement, economy or diplomacy system yet. Memory currently stores local events, not a complete
+settlement, economy or diplomacy system yet. Memory stores local events and bounded resource sightings, not a complete
 resource map, social model or learned skill system. No idle-shutdown avoidance.
 
 ## Windows CMD setup
@@ -209,9 +211,11 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v5 reads v1–v4 snapshots and upgrades on the next write; older releases
-refuse unsupported newer schemas rather than silently interpreting newer tool history. Resource
-locations appear in current observations but are not yet persisted as a world map.
+Memory schema v6 reads v1–v5 snapshots and upgrades on the next write; older releases
+refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
+resource sightings share the 500-record memory budget. The planner receives at most
+eight resource memories separately from event history, with age and recheck flags.
+This is a bounded landmark index, not a complete map or proof of remaining supply.
 When cloud AI is enabled, retrieved local records are sent as planning context.
 These files still contain private gameplay history/locations; keep them local.
 
@@ -252,8 +256,9 @@ is not a complete competent-player combat model.
 | V0.2.4 | Approved table placement/opening and late-window safety | 163 |
 | V0.2.5 | Approved dropped-item collection and pickup verification | 191 |
 | V0.2.6 | Needs-aware planning and failed-action cooldowns | 215 |
+| V0.2.7 | Persistent resource sightings and scoped recall | 236 |
 
-See `docs/V0.2.6.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.7.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -289,3 +294,16 @@ knowledge. See [V0.2.6 notes](docs/V0.2.6.md) for limits and automated verificat
 
 Live testing is deferred while implementation matures; passing offline tests is
 not a claim that the complete civilization platform is ready.
+
+## V0.2.7 resource memory
+
+Visible allowlisted resource locations observed at spawn and before strategy
+planning are remembered locally. Repeat sightings update the same location.
+A missing item in a truncated scan is **not** marked depleted. Recall distinguishes
+`historical_recheck_required` from `matches_current_observation`, and both require
+execution-time checks. Mining permissions, tool checks and reach limits still apply.
+Seven-day-old or future-dated sightings are excluded from recall; memory bounds can
+evict them earlier. Reset `MC_WORLD_ID` after a world reset to isolate old knowledge.
+No shared cross-agent map or travel/navigation skill is added in this version.
+
+See [V0.2.7 notes](docs/V0.2.7.md) and the [implementation progress ledger](docs/PROGRESS.md).

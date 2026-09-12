@@ -40,11 +40,14 @@ export class StrategyController {
       catch { this.emit({ type: 'MEMORY-ERROR', code: 'memory_read_failed' }); }
       if (this.memory) await this.remember('observation', observation);
       if (!this.active || epoch !== this.epoch) return;
+      let resourceMemories = [];
+      try { resourceMemories = this.memory?.retrieveResources?.(observation) || []; }
+      catch { this.emit({ type: 'MEMORY-ERROR', code: 'resource_memory_read_failed' }); }
       let goal;
       let source = 'local_fallback';
       if (this.provider) {
         try {
-          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories, deferredAttempts: this.attempts.context(observation) }, { signal: this.controller.signal });
+          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories, resourceMemories, deferredAttempts: this.attempts.context(observation) }, { signal: this.controller.signal });
           source = 'cloud';
         } catch (error) {
           if (this.active && epoch === this.epoch) this.emit({ type: 'STRATEGY-PROVIDER', code: ['missing_api_key', 'budget_exhausted', 'authentication_failed', 'network_or_timeout', 'cancelled', 'invalid_provider_output', 'provider_http_error'].includes(error.code) ? error.code : 'provider_unavailable' });

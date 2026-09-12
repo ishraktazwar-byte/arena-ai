@@ -1,11 +1,12 @@
 import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { RESOURCE_LIMIT, resourcePosition, resourceBlock, resourceSightings, mergeResourceRecords, recallResources } from './resources.js';
 
-const SCHEMA = 5; // v1-v4 remain readable; collection outcomes require v5 on write.
+const SCHEMA = 6; // v1-v5 remain readable; resource sightings require v6 on write.
 const LIMIT = 500;
 const MAX_BYTES = 2 * 1024 * 1024;
-const KINDS = new Set(['spawn', 'death', 'observation', 'goal_result']);
+const KINDS = new Set(['spawn', 'death', 'observation', 'goal_result', 'resource_sighting']);
 const STATES = new Set(['COMPLETED', 'BLOCKED', 'CANCELLED', 'FAILED']);
 const TOOLS = new Set(['scan', 'wait', 'move_step', 'scan_resources', 'mine', 'craft_options', 'craft', 'workspace_options', 'place_crafting_table', 'craft_at_table', 'scan_items', 'collect_items']); // Historical names remain readable even if a tool is disabled.
 const label = value => typeof value === 'string' && /^[a-zA-Z0-9_:.-]{1,160}$/.test(value);
@@ -20,6 +21,7 @@ function validRecord(record) {
   if (!keysAre(record, ['id', 'at', 'worldId', 'dimension', 'position', 'kind', 'source', 'data'])) return false;
   if (typeof record.id !== 'string' || !/^[0-9a-f-]{36}$/.test(record.id) || !Number.isSafeInteger(record.at) || record.at < 0) return false;
   if (!label(record.worldId) || !(record.dimension === null || label(record.dimension)) || !coordinate(record.position) || !KINDS.has(record.kind)) return false;
+  if (record.kind === 'resource_sighting') return record.source === 'local_observation' && label(record.dimension) && resourcePosition(record.position) && keysAre(record.data, ['block']) && resourceBlock(record.data.block);
   if (record.kind === 'goal_result') return record.source === 'local_execution' && keysAre(record.data, ['tool', 'state']) && TOOLS.has(record.data.tool) && STATES.has(record.data.state);
   return record.source === 'local_observation' && keysAre(record.data, ['health', 'food']) && ['health', 'food'].every(key => record.data[key] === null || (Number.isFinite(record.data[key]) && record.data[key] >= 0 && record.data[key] <= 20));
 }
@@ -30,9 +32,12 @@ async function load(path, agent) {
   if (Buffer.byteLength(raw) > MAX_BYTES) throw new MemoryError('memory_corrupt');
   let envelope;
   try { envelope = JSON.parse(raw); } catch { throw new MemoryError('memory_corrupt'); }
-  if (Number.isInteger(envelope?.schemaVersion) && ![1, 2, 3, 4, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
-  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, 2, 3, 4, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
+  if (Number.isInteger(envelope?.schemaVersion) && ![1, 2, 3, 4, 5, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
+  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, 2, 3, 4, 5, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
   if (new Set(envelope.records.map(r => r.id)).size !== envelope.records.length) throw new MemoryError('memory_corrupt');
+  const resources = envelope.records.filter(record => record.kind === 'resource_sighting');
+  const locations = resources.map(record => JSON.stringify([record.worldId, record.dimension, record.position.x, record.position.y, record.position.z]));
+  if (resources.length > RESOURCE_LIMIT || new Set(locations).size !== resources.length || (envelope.schemaVersion < 6 && resources.length)) throw new MemoryError('memory_corrupt');
   return envelope.records;
 }
 
@@ -87,6 +92,9 @@ export class MemoryStore {
   }
   remember(kind, observation, result) {
     if (this.closed) return Promise.reject(new MemoryError('memory_closed'));
+    // Sightings are generated only from local observation/spawn input, never
+    // from a model-supplied goal result or arbitrary direct resource writes.
+    if (!['spawn', 'death', 'observation', 'goal_result'].includes(kind)) return Promise.reject(new MemoryError('memory_record_invalid'));
     const record = {
       id: randomUUID(), at: this.now(), worldId: this.worldId,
       dimension: observation.dimension ?? null,
@@ -95,8 +103,12 @@ export class MemoryStore {
       data: kind === 'goal_result' ? { tool: result?.tool, state: result?.state } : { health: observation.health ?? null, food: observation.food ?? null }
     };
     if (!validRecord(record)) return Promise.reject(new MemoryError('memory_record_invalid'));
+    const sightings = ['spawn', 'observation'].includes(kind) && label(record.dimension) ? resourceSightings(observation).map(item => ({
+      id: randomUUID(), at: record.at, worldId: this.worldId, dimension: record.dimension,
+      position: item.position, kind: 'resource_sighting', source: 'local_observation', data: { block: item.block }
+    })) : [];
     const operation = this.queue.then(async () => {
-      const next = [...this.records, record].slice(-LIMIT);
+      const next = mergeResourceRecords([...this.records, record], sightings).slice(-LIMIT);
       // Backup is the last validated in-memory snapshot, never untrusted disk data.
       await this.atomicWrite(this.backup, this.records);
       await this.atomicWrite(this.path, next);
@@ -115,7 +127,12 @@ export class MemoryStore {
       const importance = record.kind === 'death' ? 30 : record.kind === 'goal_result' && record.data.state !== 'COMPLETED' ? 15 : 0;
       return importance + proximity + 10 / (1 + ageDays);
     };
-    return this.records.filter(r => r.worldId === this.worldId && r.dimension === dimension).sort((a, b) => score(b) - score(a) || b.at - a.at).slice(0, limit).map(r => structuredClone(r));
+    return this.records.filter(r => r.kind !== 'resource_sighting' && r.worldId === this.worldId && r.dimension === dimension).sort((a, b) => score(b) - score(a) || b.at - a.at).slice(0, limit).map(r => structuredClone(r));
+  }
+  retrieveResources(observation = {}, { limit = 8 } = {}) {
+    const { dimension, position = null } = observation;
+    if (!label(dimension) || !coordinate(position) || !Number.isInteger(limit) || limit < 1 || limit > 16) return [];
+    return recallResources(this.records, { worldId: this.worldId, dimension, position, now: this.now(), limit, current: observation });
   }
   get size() { return this.records.length; }
   async flush() { await this.queue; }
