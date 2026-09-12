@@ -23,7 +23,7 @@ export function assessRisk(snapshot) {
   if (!Number.isFinite(snapshot.health) || !Number.isFinite(snapshot.food)) return { mode: 'HALT', reason: 'unknown_vitals', floor: 1000 };
   if (snapshot.health <= 0) return { mode: 'HALT', reason: 'dead', floor: 1000 };
   if (snapshot.hazardousBlock) return { mode: 'HALT', reason: 'hazardous_block', floor: 1000 };
-  if (Number.isFinite(snapshot.oxygen) && snapshot.oxygen <= 60) return { mode: 'HALT', reason: 'low_oxygen', floor: 1000 };
+  if (Number.isFinite(snapshot.oxygen) && snapshot.oxygen <= 4) return { mode: 'HALT', reason: 'low_oxygen', floor: 1000 };
   const nearby = (snapshot.entities || []).filter(e => Number.isFinite(e.distance) && e.distance >= 0);
   if (nearby.some(e => e.name === 'creeper' && e.distance <= 4)) return { mode: 'HALT', reason: 'close_creeper', floor: 1000 };
   if (snapshot.health <= 6) return { mode: 'RECOVER', reason: 'critical_health', floor: 500 };

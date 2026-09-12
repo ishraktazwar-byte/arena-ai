@@ -18,7 +18,7 @@ test('distant creeper does not override nearby ordinary threat', () => {
   assert.equal(assessRisk({ ...base, entities: [{ name: 'creeper', distance: 18 }] }).mode, 'NORMAL');
 });
 test('close creeper, hazard and low oxygen require emergency halt', () => {
-  for (const extra of [{ entities: [{ name: 'creeper', distance: 4 }] }, { hazardousBlock: 'lava' }, { oxygen: 30 }]) assert.equal(assessRisk({ ...base, ...extra }).floor, 1000);
+  for (const extra of [{ entities: [{ name: 'creeper', distance: 4 }] }, { hazardousBlock: 'lava' }, { oxygen: 2 }]) assert.equal(assessRisk({ ...base, ...extra }).floor, 1000);
 });
 test('critical health permits recovery actions but blocks strategy', () => {
   assert.equal(assessRisk({ ...base, health: 4 }).floor, 500);
@@ -56,10 +56,10 @@ test('missing safe food is diagnosed without repeated attempts', () => {
 test('emergency preempts strategy and gate prevents immediate restart', async () => {
   const f = fixture(); f.bot.food = 20;
   const pending = f.arbiter.run('strategy', 100, () => new Promise(() => {}));
-  f.bot.oxygenLevel = 20; f.survival.tick();
+  f.bot.oxygenLevel = 2; f.survival.tick();
   assert.equal((await pending).state, 'CANCELLED');
   assert.equal((await f.arbiter.run('strategy', 100, async () => {})).state, 'BLOCKED');
-  f.bot.oxygenLevel = 300; f.time(500); f.survival.tick();
+  f.bot.oxygenLevel = 20; f.time(500); f.survival.tick();
   assert.equal(f.arbiter.safetyFloor, 1000);
   f.time(1600); f.survival.tick();
   assert.equal((await f.arbiter.run('strategy', 100, async () => {})).state, 'COMPLETED');
@@ -90,4 +90,10 @@ test('nearby hostile defers eating even at critical health', () => {
   f.survival.tick();
   assert.equal(f.survival.busy, false);
   f.survival.stop();
+});
+
+test('Mineflayer full oxygen is 20, not protocol air-supply ticks', () => {
+  assert.equal(assessRisk({ ...base, oxygen: 20 }).mode, 'NORMAL');
+  assert.equal(assessRisk({ ...base, oxygen: 5 }).mode, 'NORMAL');
+  assert.equal(assessRisk({ ...base, oxygen: 4 }).reason, 'low_oxygen');
 });
