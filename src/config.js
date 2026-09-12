@@ -1,3 +1,5 @@
+import { autonomousWorldPolicy } from './permissions.js';
+
 export function parseConfig(env, agent) {
   if (!/^[a-z][a-z0-9_-]{0,31}$/.test(agent)) throw new Error('Invalid agent identifier');
   if (!env.MC_HOST?.trim()) throw new Error('MC_HOST is required');
@@ -12,11 +14,16 @@ export function parseConfig(env, agent) {
   if (!Number.isInteger(dailyRequestLimit) || dailyRequestLimit < 1 || dailyRequestLimit > 10000) throw new Error('Invalid AI_DAILY_REQUEST_LIMIT');
   const worldId = env.MC_WORLD_ID?.trim() || `${env.MC_HOST.trim().toLowerCase()}:${port}`;
   if (!/^[a-zA-Z0-9_:.-]{1,160}$/.test(worldId)) throw new Error('Invalid MC_WORLD_ID');
-  const miningPolicy = parseAreaPolicy(env, 'MC_MINING');
-  const workspacePolicy = parseAreaPolicy(env, 'MC_WORKSPACE');
-  const collectionPolicy = parseAreaPolicy(env, 'MC_COLLECTION');
-  const navigationPolicy = parseAreaPolicy(env, 'MC_NAVIGATION');
-  return { miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
+  const operatingMode = env.MC_OPERATING_MODE || 'restricted';
+  if (!['restricted', 'autonomous_world'].includes(operatingMode)) throw new Error('Invalid MC_OPERATING_MODE');
+  if (operatingMode === 'autonomous_world' && !env.MC_WORLD_ID?.trim()) throw new Error('Autonomous-world mode requires a stable MC_WORLD_ID');
+  const permission = prefix => operatingMode === 'autonomous_world' ? autonomousWorldPolicy() : parseAreaPolicy(env, prefix);
+  const miningPolicy = permission('MC_MINING');
+  const workspacePolicy = permission('MC_WORKSPACE');
+  const collectionPolicy = permission('MC_COLLECTION');
+  const navigationPolicy = permission('MC_NAVIGATION');
+  const restrictedSettingsIgnored = operatingMode === 'autonomous_world' && ['MC_MINING', 'MC_WORKSPACE', 'MC_COLLECTION', 'MC_NAVIGATION'].some(prefix => ['ENABLED', 'AREA', 'DIMENSION'].some(suffix => !!env[`${prefix}_${suffix}`]));
+  return { operatingMode, restrictedSettingsIgnored, miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
 }
 
 function parseAreaPolicy(env, prefix) {

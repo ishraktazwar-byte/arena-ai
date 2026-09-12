@@ -1,3 +1,4 @@
+import { autonomousWorldPolicy } from '../src/permissions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -199,4 +200,19 @@ test('late aim completion after death cannot start a new dig', async () => {
 test('client cache update plus a server non-air packet still does not confirm removal', async () => {
   const f = fixture(); f.bot.dig = async block => { f.put('air'); f.bot._client.emit('block_change', { location: block.position, type: 1 }); };
   assert.equal((await f.mine()).state, 'FAILED');
+});
+test('world-scoped mining executes without area coordinates and still rejects danger', async () => {
+  const f = fixture(), registry = createToolRegistry({ miningPolicy: autonomousWorldPolicy() });
+  const result = await registry.execute(f.bot, f.arbiter, { tool: 'mine', args, reason: '' }, {});
+  assert.equal(result.state, 'COMPLETED');
+  const g = fixture(); g.bot.health = 4;
+  const rejected = await registry.execute(g.bot, g.arbiter, { tool: 'mine', args, reason: '' }, {});
+  assert.equal(rejected.state, 'FAILED'); assert.equal(g.calls.some(Array.isArray), false);
+});
+test('world scope cannot turn an awaited mining aim into a command in a different body or dimension', async () => {
+  for (const change of [bot => { bot.game.dimension = 'the_nether'; }, bot => { bot.entity = { ...bot.entity }; }]) {
+    const f = fixture(); f.bot.lookAt = async () => change(f.bot);
+    const result = await createToolRegistry({ miningPolicy: autonomousWorldPolicy() }).execute(f.bot, f.arbiter, { tool: 'mine', args, reason: '' }, {});
+    assert.equal(result.state, 'FAILED'); assert.equal(result.reason, 'mining_body_changed'); assert.equal(f.calls.some(Array.isArray), false);
+  }
 });

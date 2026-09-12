@@ -1,3 +1,5 @@
+import { bindBodySession } from '../../src/control.js';
+import { permitsBlock } from '../../src/permissions.js';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
 import { safeFootprint, safeSegment, worldReader } from '../../src/escape.js';
 import { readBlock, isAir, sameBlock } from './resources.js';
@@ -10,8 +12,7 @@ const fail = code => { throw new WorkspaceError(code); };
 const SUPPORT = new Set(['stone', 'deepslate', 'andesite', 'diorite', 'granite', 'dirt', 'grass_block', 'coarse_dirt', 'podzol', 'mycelium', 'cobblestone', 'mossy_cobblestone']);
 const coordinators = new WeakMap();
 export function workspaceAllowed(policy, dimension, p) {
-  const a = policy?.area;
-  return policy?.enabled === true && a && dimension === policy.dimension && p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY && p.z >= a.minZ && p.z <= a.maxZ;
+  return permitsBlock(policy, dimension, p);
 }
 function checkBody(bot) {
   if (bot.version !== '1.21.1' || bot._client?.state !== 'play') fail('workspace_protocol_unavailable');
@@ -137,6 +138,7 @@ async function stageTable(bot, session, timeoutMs) {
 }
 function tableItemCount(bot) { return (bot.inventory?.items() || []).filter(item => item.name === 'crafting_table').reduce((total, item) => total + item.count, 0); }
 export async function placeTable(bot, p, policy, session, { responseTimeoutMs = 2000 } = {}) {
+  session = bindBodySession(bot, session, () => new WorkspaceError('workspace_body_changed'));
   let support = checkPlacement(bot, p, policy);
   const supportState = support.stateId;
   const item = bot.inventory.items().find(item => item.name === 'crafting_table' && item.count > 0);
@@ -256,6 +258,7 @@ function getCoordinator(bot, arbiter, emit) {
   return manager;
 }
 export async function craftAtTable(bot, args, policy, session, { arbiter, emit = () => {}, responseTimeoutMs = 2500, craft = craftOne } = {}) {
+  session = bindBodySession(bot, session, () => new WorkspaceError('workspace_body_changed'));
   let table = checkTable(bot, args, policy);
   clearInventory(bot);
   if (!arbiter || typeof session.addCleanup !== 'function' || !bot.closeWindow) fail('workspace_control_unavailable');

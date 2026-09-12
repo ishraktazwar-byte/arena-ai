@@ -1,3 +1,4 @@
+import { autonomousWorldPolicy } from '../src/permissions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { navigateLocal, planLocalRoute } from '../shared/tools/navigate.js';
@@ -153,4 +154,10 @@ test('registry exposes sanitized navigation diagnostics without granting other m
   const result = await registry.execute(f.bot, f.arbiter, { tool: 'navigate_local', args: { x: 3, z: 0 }, reason: '' }, { emit: event => events.push(event) });
   assert.equal(result.reason, 'navigation_unsafe_body'); assert.equal(events[0].type, 'NAVIGATION-RESULT');
   assert.equal(registry.catalog().some(tool => tool.name === 'mine'), false); assert.equal(registry.catalog().some(tool => tool.name === 'collect_items'), false);
+});
+test('world-scoped navigation works far outside old test rectangles while preserving per-attempt bounds', async () => {
+  const f = fixture(); f.bot.entity.position = vec(1000.5, 64, -999.5);
+  assert.equal((await f.run({ x: 1003, z: -1000 }, {}, autonomousWorldPolicy())).state, 'COMPLETED');
+  const g = fixture(); assert.equal((await g.run({ x: 7, z: 0 }, {}, autonomousWorldPolicy())).state, 'FAILED');
+  assert.equal(forwards(g), 0);
 });

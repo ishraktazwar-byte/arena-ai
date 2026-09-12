@@ -1,3 +1,5 @@
+import { bindBodySession } from '../../src/control.js';
+import { permitsBlock } from '../../src/permissions.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { safeFootprint, worldReader } from '../../src/escape.js';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
@@ -9,8 +11,7 @@ export class MiningError extends Error {
 const reject = code => { throw new MiningError(code); };
 const hazard = block => !block || ['water', 'lava', 'fire', 'soul_fire', 'magma_block', 'cactus', 'powder_snow', 'sand', 'red_sand', 'gravel', 'anvil', 'chipped_anvil', 'damaged_anvil', 'pointed_dripstone'].includes(block.name) || block.name.endsWith('_concrete_powder') || block.getProperties?.().waterlogged === true || block.getProperties?.().waterlogged === 'true';
 export function miningAllowed(policy, dimension, p) {
-  const a = policy?.area;
-  return policy?.enabled === true && a && dimension === policy.dimension && p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY && p.z >= a.minZ && p.z <= a.maxZ;
+  return permitsBlock(policy, dimension, p);
 }
 function checkBody(bot) {
   if (!bot.entity?.onGround || bot.health < 12 || bot.food < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL') reject('unsafe_body');
@@ -51,6 +52,7 @@ function inventoryCounts(bot) {
 }
 
 export async function mineBlock(bot, args, policy, session, { confirmationMs = 1500 } = {}) {
+  session = bindBodySession(bot, session, () => new MiningError('mining_body_changed'));
   const { guard, signal } = session;
   let block = checkMining(bot, args, policy);
   const expectedState = block.stateId;

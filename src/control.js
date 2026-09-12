@@ -73,3 +73,13 @@ export class ControlArbiter {
     }
   }
 }
+
+// Cross-dimension permission must not make an in-flight action cross bodies or
+// worlds. A new planning cycle may use a new dimension; an old action may not.
+export function bindBodySession(bot, session, changedError) {
+  const entity = bot.entity, dimension = bot.game?.dimension;
+  return { ...session, guard: fn => session.guard(() => {
+    if (bot.entity !== entity || bot.game?.dimension !== dimension) throw changedError();
+    return fn();
+  }) };
+}

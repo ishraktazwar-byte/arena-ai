@@ -1,3 +1,4 @@
+import { autonomousWorldPolicy } from '../src/permissions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -223,4 +224,12 @@ test('collection failures produce bounded event diagnostics', async () => {
   const result = await registry.execute(f.bot, f.arbiter, { tool: 'collect_items', args, reason: '' }, { emit: event => events.push(event) });
   assert.equal(result.state, 'FAILED'); assert.equal(result.reason, 'collection_unsafe_body');
   assert.equal(events[0].type, 'COLLECTION-RESULT'); assert.equal(events[0].reason, result.reason);
+});
+test('world-scoped collection needs no rectangle and still requires inventory evidence', async () => {
+  const f = fixture(); assert.equal(scanItems(f.bot, autonomousWorldPolicy()).items[0].eligible, true);
+  const result = await f.run({}, args, autonomousWorldPolicy());
+  assert.equal(result.state, 'COMPLETED'); assert.equal(result.result.serverInventoryVerified, true);
+  const g = fixture(); g.autoPickup = false;
+  g.onTick = () => { if (g.bot.entities[101]) g.pickup({ gain: 0 }); };
+  assert.equal((await g.run({}, args, autonomousWorldPolicy())).state, 'FAILED');
 });

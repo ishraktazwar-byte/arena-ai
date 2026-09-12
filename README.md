@@ -2,9 +2,42 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.8 — approved-area bounded local navigation on known flat terrain.**
+**Current: V0.2.9 — autonomous-world operation without per-area approvals.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
+
+## Intended operation: an autonomous agent world
+
+For a dedicated world where the agents may independently gather and build, set
+these values once in your local `.env`:
+
+```dotenv
+MC_OPERATING_MODE=autonomous_world
+MC_WORLD_ID=your-stable-agent-world-id
+AI_ENABLED=true
+```
+
+Keep the OpenRouter key only in local `.env`, as described below. The existing
+free-only provider and shared request budget remain unchanged. This mode exposes
+all implemented navigation, mining, collection and crafting-workspace skills in
+the Overworld, Nether and End **without drawing or approving individual areas**.
+The planner selects actions; there is no per-action approval prompt or fixed
+house/farm/king sequence. Bounded attempts and local survival checks still apply.
+
+`MC_MINING_*`, `MC_COLLECTION_*`, `MC_WORKSPACE_*` and `MC_NAVIGATION_*` area
+settings are ignored in this mode, including old `ENABLED=false` values. Startup
+reports the effective mode and whether those settings were ignored. Change
+`MC_WORLD_ID` after a reset. Use this mode only for a world where these actions
+are permitted; ownership detection and player-property protection do not yet exist.
+
+`restricted` remains an optional deployment mode for shared servers. It is also
+the default when the setting is missing, so upgrading an existing installation
+never silently expands permission. **The per-area instructions later in this
+README apply to restricted mode only.** With AI off, unavailable or out of budget,
+strategy still falls back to observation; world scope alone does not invent goals.
+
+This corrects the deployment model, not all missing autonomy features. Long-term
+plans, general navigation, production and civilization systems remain unfinished.
 
 ## What works in automated tests
 
@@ -260,8 +293,9 @@ is not a complete competent-player combat model.
 | V0.2.6 | Needs-aware planning and failed-action cooldowns | 215 |
 | V0.2.7 | Persistent resource sightings and scoped recall | 236 |
 | V0.2.8 | Bounded local navigation with guarded route execution | 259 |
+| V0.2.9 | Autonomous-world scope with optional restricted deployment | 281 |
 
-See `docs/V0.2.8.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.9.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.

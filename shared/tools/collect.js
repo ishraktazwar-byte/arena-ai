@@ -1,3 +1,4 @@
+import { permitsPosition } from '../../src/permissions.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
 import { executeEscape as moveGroundStep, safeFootprint, safeSegment, worldReader } from '../../src/escape.js';
@@ -15,8 +16,7 @@ export class CollectionError extends Error {
 const fail = code => { throw new CollectionError(code); };
 
 export function collectionAllowed(policy, dimension, position) {
-  const a = policy?.area;
-  return !!(policy?.enabled && a && dimension === policy.dimension && validPosition(position) && position.x >= a.minX && position.x < a.maxX + 1 && position.y >= a.minY && position.y < a.maxY + 1 && position.z >= a.minZ && position.z < a.maxZ + 1);
+  return permitsPosition(policy, dimension, position);
 }
 function approvedFootprint(policy, dimension, position) {
   return [-0.32, 0.32].every(x => [-0.32, 0.32].every(z => collectionAllowed(policy, dimension, { x: position.x + x, y: position.y, z: position.z + z })));

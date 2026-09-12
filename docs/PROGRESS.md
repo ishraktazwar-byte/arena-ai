@@ -1,6 +1,6 @@
 # Arena AI — implementation progress
 
-Updated for V0.2.8. This is a capability ledger, not a percentage or a promise that
+Updated for V0.2.9. This is a capability ledger, not a percentage or a promise that
 all the original instructions are complete. The remaining social/economic and
 world-building systems are much larger than individual completed tools.
 
@@ -17,6 +17,9 @@ world-building systems are much larger than individual completed tools.
 - Visible resource scanning; approved-region single-block mining; independent
   approved-region dropped-item pickup with inventory evidence; guarded starter
   crafting; independently approved crafting-table placement/use.
+- V0.2.9: one-time autonomous-world deployment makes all implemented gathering,
+  navigation and workspace mutations available without per-area setup; restricted
+  mode remains optional for shared servers. This is not complete strategic autonomy.
 - V0.2.8: independently approved six-block local routing around known obstacles,
   with twelve-leg/time budgets and safety checks during movement.
 - V0.2.7: bounded persistent resource sightings with world/dimension isolation,
@@ -48,9 +51,9 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.8: 259 tests passed on Ubuntu/Windows with Node 22/24, including local-navigation
-regressions; exact implementation and hosted CI proof are in
-[V0.2.8.md](V0.2.8.md). These are automated/simulated and pinned API-contract tests,
+V0.2.8 baseline: 259 tests passed on Ubuntu/Windows with Node 22/24. V0.2.9
+verification of autonomous and restricted deployment is recorded in
+[V0.2.9.md](V0.2.9.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push
@@ -58,3 +61,11 @@ without approval checkpoints. Do not start live testing yet. Reach a substantial
 more mature implementation before the agreed live-test/fix phase. The suggested
 GitHub-disconnection networking workaround remains unverified. No exact overall
 completion percentage is asserted.
+
+## Direction correction
+
+Autonomy is the target, not manually managed activity rectangles. In a dedicated
+agent world the user establishes operating policy once; agents choose actions
+and locations within their current skills. Safety determines HOW, not manual
+approval of WHAT. Per-area policy remains an optional shared-server safeguard.
+No fixed civilization story or hard-coded life progression is introduced.

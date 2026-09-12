@@ -1,3 +1,4 @@
+import { permitsPosition } from '../../src/permissions.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
 import { executeEscape, safeFootprint, safeSegment, worldReader } from '../../src/escape.js';
@@ -9,8 +10,8 @@ const key = p => `${Math.floor(p.x)},${Math.floor(p.z)}`;
 export class NavigationError extends Error { constructor(code) { super(code); this.code = code; } }
 const fail = code => { throw new NavigationError(code); };
 function approved(policy, dimension, p) {
-  const a = policy?.area;
-  return !!(policy?.enabled && a && policy.dimension === dimension && valid(p) && p.y >= a.minY && p.y < a.maxY + 1 && p.x - 0.32 >= a.minX && p.x + 0.32 < a.maxX + 1 && p.z - 0.32 >= a.minZ && p.z + 0.32 < a.maxZ + 1);
+  if (!valid(p)) return false;
+  return [-0.32, 0.32].every(x => [-0.32, 0.32].every(z => permitsPosition(policy, dimension, { x: p.x + x, y: p.y, z: p.z + z })));
 }
 function segment(reader, policy, anchor, a, b) {
   if (!approved(policy, anchor.dimension, a) || !approved(policy, anchor.dimension, b) || distance(a, anchor.position) > RADIUS || distance(b, anchor.position) > RADIUS) return false;

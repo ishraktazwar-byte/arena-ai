@@ -1,3 +1,4 @@
+import { autonomousWorldPolicy } from '../src/permissions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -277,4 +278,23 @@ test('cancelled placement cleans acknowledgement listener and never claims rollb
   assert.equal(f.client.listenerCount('block_change'), 0);
   f.put('crafting_table'); f.client.emit('block_change', { location: point, type: 2 });
   assert.equal(f.calls.filter(c => c[0] === 'block_place').length, 1);
+});
+test('world-scoped table placement and use retain actual placement and table safety checks', async t => {
+  const f = fixture(t), worldPolicy = autonomousWorldPolicy();
+  const registry = createToolRegistry({ workspacePolicy: worldPolicy });
+  const result = await registry.execute(f.bot, f.arbiter, { tool: 'place_crafting_table', args: point, reason: '' }, {});
+  assert.equal(result.state, 'COMPLETED'); assert.doesNotThrow(() => checkTable(f.bot, point, worldPolicy));
+  f.bot.health = 4; assert.throws(() => checkTable(f.bot, point, worldPolicy));
+});
+test('world-scoped placement rejects dimension change during aim before any block interaction', async t => {
+  const f = fixture(t); f.bot.lookAt = async () => { f.bot.game.dimension = 'the_nether'; };
+  const result = await createToolRegistry({ workspacePolicy: autonomousWorldPolicy() }).execute(f.bot, f.arbiter, { tool: 'place_crafting_table', args: point, reason: '' }, {});
+  assert.equal(result.state, 'FAILED'); assert.equal(result.reason, 'workspace_body_changed');
+  assert.equal(f.calls.some(([name]) => name === 'block_place'), false);
+});
+test('world-scoped table opening rejects a replaced body during aim', async t => {
+  const f = fixture(t); f.put('crafting_table'); f.bot.lookAt = async () => { f.bot.entity = { ...f.bot.entity }; };
+  const result = await createToolRegistry({ workspacePolicy: autonomousWorldPolicy() }).execute(f.bot, f.arbiter, { tool: 'craft_at_table', args: craftArgs, reason: '' }, {});
+  assert.equal(result.state, 'FAILED'); assert.equal(result.reason, 'workspace_body_changed');
+  assert.equal(f.calls.some(([name]) => name === 'block_place'), false);
 });
