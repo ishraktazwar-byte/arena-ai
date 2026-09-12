@@ -59,8 +59,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.11 baseline: 327 tests passed on Ubuntu/Windows with Node 22/24. V0.2.12
-verification of crop harvesting is recorded in
+V0.2.12: 352 tests passed on Ubuntu/Windows with Node 22/24. Exact implementation
+and hosted CI proof for crop harvesting are recorded in
 [V0.2.12.md](V0.2.12.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
