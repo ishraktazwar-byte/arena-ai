@@ -1,31 +1,48 @@
 import { catalog, validateGoal } from './goals.js';
 
 export class StrategyController {
-  constructor({ provider, identity, observe, execute, emit, intervalMs = 300000, now = Date.now }) {
-    Object.assign(this, { provider, identity, observe, execute, emit, intervalMs, now });
+  constructor({ provider, identity, observe, execute, emit, intervalMs = 300000, now = Date.now, memory = null }) {
+    Object.assign(this, { provider, identity, observe, execute, emit, intervalMs, now, memory });
     this.active = false;
     this.busy = false;
     this.epoch = 0;
     this.recent = [];
     this.nextAt = 0;
     this.controller = null;
+    this.pending = null;
   }
   start() { this.active = true; this.epoch++; this.nextAt = this.now(); }
   stop() { this.active = false; this.epoch++; this.controller?.abort(); }
   invalidate() { this.epoch++; this.controller?.abort(); }
-  async tick() {
-    if (!this.active || this.busy || this.now() < this.nextAt) return;
+  tick() {
+    if (!this.active || this.busy || this.now() < this.nextAt) return Promise.resolve();
+    this.pending = this.runTick();
+    return this.pending;
+  }
+  async settle() { await this.pending; }
+  async remember(kind, observation, result) {
+    if (!this.memory) return;
+    try { await this.memory.remember(kind, observation, result); }
+    catch { this.emit({ type: 'MEMORY-ERROR', code: 'memory_write_failed' }); }
+  }
+  async runTick() {
     this.busy = true;
     this.nextAt = this.now() + this.intervalMs;
     const epoch = this.epoch, started = this.now();
     this.controller = new AbortController();
     try {
       const observation = this.observe();
+      // Take a bounded local-memory snapshot before querying the provider.
+      let memories = [];
+      try { memories = this.memory?.retrieve({ dimension: observation.dimension, position: observation.position }) || []; }
+      catch { this.emit({ type: 'MEMORY-ERROR', code: 'memory_read_failed' }); }
+      if (this.memory) await this.remember('observation', observation);
+      if (!this.active || epoch !== this.epoch) return;
       let goal;
       let source = 'local_fallback';
       if (this.provider) {
         try {
-          goal = await this.provider.plan({ identity: this.identity, observation, tools: catalog, recentResults: this.recent.slice(-5) }, { signal: this.controller.signal });
+          goal = await this.provider.plan({ identity: this.identity, observation, tools: catalog, recentResults: this.recent.slice(-5), memories }, { signal: this.controller.signal });
           source = 'cloud';
         } catch (error) {
           if (this.active && epoch === this.epoch) this.emit({ type: 'STRATEGY-PROVIDER', code: ['missing_api_key', 'budget_exhausted', 'authentication_failed', 'network_or_timeout', 'cancelled', 'invalid_provider_output', 'provider_http_error'].includes(error.code) ? error.code : 'provider_unavailable' });
@@ -40,6 +57,8 @@ export class StrategyController {
       }
       this.emit({ type: 'STRATEGY-GOAL', tool: goal.tool, source }); // Never log raw model text.
       const result = await this.execute(goal);
+      // Interrupted goals remain historical outcomes, not resumable commands.
+      await this.remember('goal_result', epoch === this.epoch ? this.observe() : observation, { tool: goal.tool, state: result.state });
       if (!this.active || epoch !== this.epoch) return;
       const record = { at: this.now(), tool: goal.tool, state: result.state };
       this.recent.push(record);

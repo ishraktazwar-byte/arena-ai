@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.0 — local survival/combat and validated cloud strategy foundation.**
+**Current: V0.2.1 — persistent memory and validated strategy foundation.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -12,14 +12,16 @@ An autonomous Minecraft-agent platform under development.
 - Action ownership, cancellation, timeouts and stale-command guards.
 - Basic eating, conservative risk gates and bounded flat-ground escape.
 - Stable melee targets, equipment selection, safe approach and final attack checks.
+- Persistent local observations, deaths and goal outcomes with bounded retrieval.
 - Validated `scan`, `wait`, and `move_step` strategic tools—no generated JavaScript.
 - Optional OpenRouter free-router planning, timeout/retry handling and a shared
   daily request budget. With AI off/unavailable, strategy falls back to scanning;
   local eating, combat and escape do not need an API key.
 
 **This is not a finished civilization simulation or live-validated survival bot.**
-There is no ranged combat, shield tactic, resource gathering, persistent memory,
-settlement, economy or diplomacy system yet. No idle-shutdown avoidance.
+There is no ranged combat, shield tactic, resource gathering, settlement, economy
+or diplomacy system yet. Memory currently stores local events, not a complete
+resource map, social model or learned skill system. No idle-shutdown avoidance.
 
 ## Windows CMD setup
 
@@ -68,6 +70,35 @@ budget lock fails closed: after stopping **all** agents, inspect and remove only
 `runtime/shared/request-budget.lock` if a prior process crashed. Do not delete the
 budget JSON to bypass a used quota.
 
+### Persistent memory
+
+`MC_WORLD_ID=arena-world-1` identifies the actual world, not its temporary network
+address. Keep it unchanged across DynIP/port changes. **Change it after a world
+reset or when connecting to another world**, so old coordinates are not recalled
+as current knowledge. If unset, it defaults to `host:port` (less reliable on Aternos).
+
+Each agent stores up to 500 structured records in:
+
+```text
+runtime/agents/alice/memory.json
+runtime/agents/alice/memory.backup.json
+```
+
+The planner receives at most eight records from the current world and dimension,
+ranked using recency, distance and event importance. Restart does not replay old
+actions. Successful/failed/interrupted goal results are historical evidence only.
+No chat, arbitrary model reasoning, API keys or environment contents are stored.
+When cloud AI is enabled, retrieved local records are sent as planning context.
+These files still contain private gameplay history/locations; keep them local.
+
+A lock prevents two processes from writing the same agent's memory. Clean exit
+waits for queued writes and releases the lock. After a crash, **stop all instances
+of that agent first**, then remove only its `memory.lock` directory if it is
+orphaned. Never remove an active process's lock. A corrupt primary can recover
+from the previous valid backup; both corrupt files cause startup to fail without
+silently replacing the history. Unsupported future schemas also fail closed.
+See the version document for retention/recovery limits.
+
 ### Operator commands
 
 `status`, `step`, `stop`, `quit`.
@@ -91,8 +122,9 @@ is not a complete competent-player combat model.
 | V0.1.2 | Bounded ground escape | 29 |
 | V0.1.3 | Stable local melee | 45 |
 | V0.2.0 | Validated goals and optional provider | 62 |
+| V0.2.1 | Persistent structured memory and retrieval | 81 |
 
-See `docs/V0.2.0.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.1.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.

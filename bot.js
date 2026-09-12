@@ -6,32 +6,56 @@ import { parseConfig } from './src/config.js';
 import { attachRuntime } from './src/runtime.js';
 import { SharedBudget } from './src/strategy/budget.js';
 import { OpenRouterProvider } from './src/strategy/provider.js';
+import { MemoryStore } from './src/memory/store.js';
 
+let memory, bot, runtime, terminal;
+let finalizing;
+async function finalize() {
+  if (finalizing) return finalizing;
+  finalizing = (async () => {
+    terminal?.close();
+    await runtime?.settle();
+    await memory?.close();
+  })();
+  return finalizing;
+}
 try {
   const config = parseConfig(process.env, process.argv[2] || 'alice');
   const identity = JSON.parse(readFileSync(new URL(`./agents/${config.agent}.json`, import.meta.url), 'utf8'));
   const emit = event => console.log(JSON.stringify({ at: new Date().toISOString(), agent: config.agent, ...event }));
-  const bot = mineflayer.createBot({ host: config.host, port: config.port, version: config.version, auth: config.auth, username: config.username || identity.name, profilesFolder: `runtime/auth/${config.agent}` });
+  // Acquire memory ownership before joining: duplicate processes fail early.
+  memory = await MemoryStore.open({ directory: `runtime/agents/${config.agent}`, agent: config.agent, worldId: config.worldId });
+  emit({ type: 'MEMORY-READY', records: memory.size, recovered: memory.recovered });
+  bot = mineflayer.createBot({ host: config.host, port: config.port, version: config.version, auth: config.auth, username: config.username || identity.name, profilesFolder: `runtime/auth/${config.agent}` });
   const budget = new SharedBudget('runtime/shared', config.dailyRequestLimit);
   const provider = config.aiEnabled ? new OpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY, reserve: () => budget.reserve() }) : null;
-  const runtime = attachRuntime(bot, emit, { provider, identity, aiIntervalMs: config.aiIntervalMs });
-  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  runtime = attachRuntime(bot, emit, { provider, identity, aiIntervalMs: config.aiIntervalMs, memory });
+  terminal = createInterface({ input: process.stdin, output: process.stdout });
   let closing = false;
-  function close() { if (closing) return; closing = true; terminal.close(); runtime.close(); }
+  async function close() {
+    if (closing) return;
+    closing = true;
+    try { await runtime.close(); await finalize(); }
+    catch { emit({ type: 'SHUTDOWN-ERROR', code: 'cleanup_failed' }); process.exitCode = 1; }
+  }
   terminal.on('line', async line => {
-    switch (line.trim()) {
-      case 'status': emit({ type: 'STATUS', ...runtime.status() }); break;
-      case 'step': emit({ type: 'STEP_RESULT', ...await runtime.step() }); break;
-      case 'stop': runtime.arbiter.cancel('operator'); break;
-      case 'quit': close(); break;
-      default: emit({ type: 'HELP', commands: ['status', 'step', 'stop', 'quit'] });
-    }
+    try {
+      switch (line.trim()) {
+        case 'status': emit({ type: 'STATUS', ...runtime.status() }); break;
+        case 'step': emit({ type: 'STEP_RESULT', ...await runtime.step() }); break;
+        case 'stop': runtime.arbiter.cancel('operator'); break;
+        case 'quit': await close(); break;
+        default: emit({ type: 'HELP', commands: ['status', 'step', 'stop', 'quit'] });
+      }
+    } catch { emit({ type: 'COMMAND-ERROR', code: 'command_failed' }); }
   });
-  bot.on('end', () => terminal.close());
-  process.once('SIGINT', close);
-  process.once('SIGTERM', close);
-  emit({ type: 'START', version: '0.2.0', message: 'Commands: status, step, stop, quit. Local survival and validated goals; cloud planning opt-in. Live validation pending.' });
+  bot.on('end', () => { void finalize().catch(() => { emit({ type: 'MEMORY-ERROR', code: 'memory_close_failed' }); process.exitCode = 1; }); });
+  process.once('SIGINT', () => { void close(); });
+  process.once('SIGTERM', () => { void close(); });
+  emit({ type: 'START', version: '0.2.1', message: 'Commands: status, step, stop, quit. Persistent local memory enabled; cloud planning opt-in. Live validation pending.' });
 } catch (error) {
-  console.error(`Startup failed: ${error.code === 'ENOENT' ? 'Agent configuration not found' : error.message}`);
+  console.error(`Startup failed: ${error.code === 'ENOENT' ? 'Agent configuration not found' : error.code?.startsWith('memory_') ? error.code : 'Check local configuration and dependencies'}`);
+  bot?.quit();
+  await finalize().catch(() => {});
   process.exitCode = 1;
 }
