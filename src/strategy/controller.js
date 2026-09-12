@@ -1,6 +1,12 @@
 import { catalog, validateGoal } from './goals.js';
 import { AttemptLedger } from './attempts.js';
-import { decisionSteps } from './plans.js';
+import { validateDecision } from './plans.js';
+import { objectiveItems } from './objectives.js';
+
+function stale(before, after, elapsed) {
+  const moved = before.position && after.position && Math.hypot(after.position.x - before.position.x, after.position.y - before.position.y, after.position.z - before.position.z) > 2;
+  return elapsed < 0 || elapsed > 30000 || after.dimension !== before.dimension || moved || after.health < before.health;
+}
 
 export class StrategyController {
   constructor({ provider, identity, observe, execute, emit, intervalMs = 300000, now = Date.now, memory = null, toolRegistry = null }) {
@@ -44,11 +50,14 @@ export class StrategyController {
       let resourceMemories = [];
       try { resourceMemories = this.memory?.retrieveResources?.(observation) || []; }
       catch { this.emit({ type: 'MEMORY-ERROR', code: 'resource_memory_read_failed' }); }
+      let objective = null;
+      try { objective = this.memory?.retrieveObjective?.(observation) || null; }
+      catch { this.emit({ type: 'MEMORY-ERROR', code: 'objective_read_failed' }); }
       let goal;
       let source = 'local_fallback';
       if (this.provider) {
         try {
-          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories, resourceMemories, deferredAttempts: this.attempts.context(observation) }, { signal: this.controller.signal });
+          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories, resourceMemories, objective, objectiveOptions: { items: objectiveItems, maxCount: 64 }, deferredAttempts: this.attempts.context(observation) }, { signal: this.controller.signal });
           source = 'cloud';
         } catch (error) {
           if (this.active && epoch === this.epoch) this.emit({ type: 'STRATEGY-PROVIDER', code: ['missing_api_key', 'budget_exhausted', 'authentication_failed', 'network_or_timeout', 'cancelled', 'invalid_provider_output', 'provider_http_error'].includes(error.code) ? error.code : 'provider_unavailable' });
@@ -57,11 +66,19 @@ export class StrategyController {
       // A safe read-only fallback does not invent long-term goals or movement.
       const proposed = goal || { tool: 'scan', args: {}, reason: 'Observe while cloud planning is unavailable.' };
       const allowedTools = this.toolRegistry ? this.toolRegistry.catalog().map(tool => tool.name) : catalog.map(tool => tool.name);
-      const steps = decisionSteps(proposed, allowedTools);
-      const current = this.observe();
-      const moved = observation.position && current.position && Math.hypot(current.position.x - observation.position.x, current.position.y - observation.position.y, current.position.z - observation.position.z) > 2;
-      if (!this.active || epoch !== this.epoch || this.now() - started > 30000 || current.dimension !== observation.dimension || moved || current.health < observation.health) {
+      const decision = validateDecision(proposed, allowedTools);
+      const steps = decision.steps || [decision];
+      let current = this.observe();
+      if (!this.active || epoch !== this.epoch || stale(observation, current, this.now() - started)) {
         this.emit({ type: 'STRATEGY-DISCARD', reason: 'stale_context' }); return;
+      }
+      if (Object.hasOwn(decision, 'objective')) {
+        if (this.memory) await this.remember('objective', current, { objective: decision.objective });
+        else this.emit({ type: 'MEMORY-ERROR', code: 'objective_storage_unavailable' });
+        current = this.observe();
+        if (!this.active || epoch !== this.epoch || stale(observation, current, this.now() - started) || current.risk?.mode !== 'NORMAL' || !Number.isFinite(current.health) || !Number.isFinite(current.food) || current.food < 12) {
+          this.emit({ type: 'STRATEGY-DISCARD', reason: 'stale_context' }); return;
+        }
       }
       if (steps.length > 1) this.emit({ type: 'STRATEGY-PLAN', steps: steps.length });
       // Plans are ephemeral: no queue is kept after this tick, death or restart.

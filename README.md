@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.10 — bounded multi-step planning with per-step rechecks.**
+**Current: V0.2.11 — persistent supply objectives with fresh inventory-based reassessment.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -48,6 +48,8 @@ plans, general navigation, production and civilization systems remain unfinished
   with live step rechecks and strict distance/time/leg limits.
 - Stable melee targets, equipment selection, safe approach and final attack checks.
 - Persistent local observations, deaths and goal outcomes with bounded retrieval.
+- Typed supply objectives survive planning cycles/restarts without replaying actions;
+  progress is reassessed against current carried inventory.
 - Bounded resource-location memory, scoped by world/dimension; historical sightings
   remain distinct from current observations and never authorize mining.
 - A runtime tool catalog: `scan`, `scan_resources`, `craft_options`, `craft`,
@@ -248,7 +250,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v7 reads v1–v6 snapshots and upgrades on the next write; older releases
+Memory schema v8 reads v1–v7 snapshots and upgrades on the next write; older releases
 refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
 resource sightings share the 500-record memory budget. The planner receives at most
 eight resource memories separately from event history, with age and recheck flags.
@@ -297,8 +299,9 @@ is not a complete competent-player combat model.
 | V0.2.8 | Bounded local navigation with guarded route execution | 259 |
 | V0.2.9 | Autonomous-world scope with optional restricted deployment | 281 |
 | V0.2.10 | Bounded multi-step planning and step revalidation | 304 |
+| V0.2.11 | Persistent supply intentions and fresh progress assessment | 327 |
 
-See `docs/V0.2.10.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.11.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -378,3 +381,19 @@ There are no loops, generated code or invented future entity IDs. One request
 can support several compatible skills without an extra cloud call per step, but
 request budgets, free-only routing and the 400-token response limit are unchanged.
 See [V0.2.10 notes](docs/V0.2.10.md). This is not yet durable long-term planning.
+
+## V0.2.11 supply objectives
+
+A cloud plan may include `objective: {item, count}` using the advertised finite
+item vocabulary and a target of 1–64 carried units. Omit it to retain the current
+objective; use `objective: null` to abandon it. One objective per world/dimension
+is retained, with up to eight contexts pinned inside the 500-record memory cap.
+An objective can survive a restart, but **its old action sequence is never saved
+or resumed**. The next planning cycle receives the objective and fresh inventory
+assessment, then chooses new actions under the current deployment policy.
+
+These are stock targets: satisfaction is temporary and can reverse after supplies
+are consumed. Unknown inventory means unknown progress; a completed action is not
+proof of objective completion. Objectives expire from recall after 24 hours and
+are explicitly labelled cloud intent, not observed world facts. No free text,
+model rationale or generated commands are persisted. See [V0.2.11 notes](docs/V0.2.11.md).
