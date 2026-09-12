@@ -48,8 +48,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.7 baseline: 236 tests passed on Ubuntu/Windows with Node 22/24. V0.2.8 adds
-local-navigation regression tests; exact implementation and verification are in
+V0.2.8: 259 tests passed on Ubuntu/Windows with Node 22/24, including local-navigation
+regressions; exact implementation and hosted CI proof are in
 [V0.2.8.md](V0.2.8.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
