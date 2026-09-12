@@ -54,8 +54,8 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.9 baseline: 281 tests passed on Ubuntu/Windows with Node 22/24. V0.2.10
-verification of bounded multi-step planning is recorded in
+V0.2.10: 304 tests passed on Ubuntu/Windows with Node 22/24. Exact implementation
+and hosted CI proof for bounded multi-step planning are recorded in
 [V0.2.10.md](V0.2.10.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
