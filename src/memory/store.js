@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RESOURCE_LIMIT, resourcePosition, resourceBlock, resourceSightings, mergeResourceRecords, recallResources } from './resources.js';
 
-const SCHEMA = 8; // v1-v7 remain readable; typed supply objectives require v8 on write.
+const SCHEMA = 9; // v1-v8 remain readable; crop tools and supply names require v9 on write.
 const LIMIT = 500;
 const MAX_BYTES = 2 * 1024 * 1024;
 const KINDS = new Set(['spawn', 'death', 'observation', 'goal_result', 'resource_sighting', 'objective']);
 const STATES = new Set(['COMPLETED', 'BLOCKED', 'CANCELLED', 'FAILED']);
-const TOOLS = new Set(['scan', 'wait', 'move_step', 'scan_resources', 'mine', 'craft_options', 'craft', 'workspace_options', 'place_crafting_table', 'craft_at_table', 'scan_items', 'collect_items', 'navigate_local']); // Historical names remain readable even if a tool is disabled.
+const TOOLS = new Set(['scan', 'wait', 'move_step', 'scan_resources', 'mine', 'craft_options', 'craft', 'workspace_options', 'place_crafting_table', 'craft_at_table', 'scan_items', 'collect_items', 'navigate_local', 'scan_crops', 'harvest_crop']); // Historical names remain readable even if a tool is disabled.
 const label = value => typeof value === 'string' && /^[a-zA-Z0-9_:.-]{1,160}$/.test(value);
 const keysAre = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join(',') === expected.sort().join(',');
 const coordinate = p => p === null || (keysAre(p, ['x', 'y', 'z']) && Object.values(p).every(n => Number.isFinite(n) && Math.abs(n) <= 30000000));
@@ -34,8 +34,8 @@ async function load(path, agent) {
   if (Buffer.byteLength(raw) > MAX_BYTES) throw new MemoryError('memory_corrupt');
   let envelope;
   try { envelope = JSON.parse(raw); } catch { throw new MemoryError('memory_corrupt'); }
-  if (Number.isInteger(envelope?.schemaVersion) && ![1, 2, 3, 4, 5, 6, 7, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
-  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, 2, 3, 4, 5, 6, 7, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
+  if (Number.isInteger(envelope?.schemaVersion) && ![1, 2, 3, 4, 5, 6, 7, 8, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
+  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, 2, 3, 4, 5, 6, 7, 8, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
   if (new Set(envelope.records.map(r => r.id)).size !== envelope.records.length) throw new MemoryError('memory_corrupt');
   const resources = envelope.records.filter(record => record.kind === 'resource_sighting');
   const locations = resources.map(record => JSON.stringify([record.worldId, record.dimension, record.position.x, record.position.y, record.position.z]));

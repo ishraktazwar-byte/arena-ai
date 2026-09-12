@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.11 — persistent supply objectives with fresh inventory-based reassessment.**
+**Current: V0.2.12 — mature-crop discovery and guarded harvesting.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -19,12 +19,12 @@ AI_ENABLED=true
 
 Keep the OpenRouter key only in local `.env`, as described below. The existing
 free-only provider and shared request budget remain unchanged. This mode exposes
-all implemented navigation, mining, collection and crafting-workspace skills in
+all implemented navigation, mining, collection, mature-crop harvesting and crafting-workspace skills in
 the Overworld, Nether and End **without drawing or approving individual areas**.
 The planner selects actions; there is no per-action approval prompt or fixed
 house/farm/king sequence. Bounded attempts and local survival checks still apply.
 
-`MC_MINING_*`, `MC_COLLECTION_*`, `MC_WORKSPACE_*` and `MC_NAVIGATION_*` area
+`MC_MINING_*`, `MC_COLLECTION_*`, `MC_WORKSPACE_*`, `MC_NAVIGATION_*` and `MC_FARMING_*` area
 settings are ignored in this mode, including old `ENABLED=false` values. Startup
 reports the effective mode and whether those settings were ignored. Change
 `MC_WORLD_ID` after a reset. Use this mode only for a world where these actions
@@ -55,6 +55,8 @@ plans, general navigation, production and civilization systems remain unfinished
 - A runtime tool catalog: `scan`, `scan_resources`, `craft_options`, `craft`,
   `wait`, `move_step`, `workspace_options`, opt-in `mine`,
   `place_crafting_table`, `craft_at_table`, `scan_items` and opt-in `collect_items`—no generated JavaScript.
+- Visible mature-crop discovery and guarded one-plant harvesting; immature crops
+  are refused. Yield, pickup and replanting are not assumed.
 - Visible nearby resource observations and region-limited single-block mining
   with equipment, geometry, cancellation and server-confirmation checks.
 - Single-batch starter crafting with guarded clicks, bounded waits and
@@ -250,7 +252,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v8 reads v1–v7 snapshots and upgrades on the next write; older releases
+Memory schema v9 reads v1–v8 snapshots and upgrades on the next write; older releases
 refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
 resource sightings share the 500-record memory budget. The planner receives at most
 eight resource memories separately from event history, with age and recheck flags.
@@ -300,8 +302,9 @@ is not a complete competent-player combat model.
 | V0.2.9 | Autonomous-world scope with optional restricted deployment | 281 |
 | V0.2.10 | Bounded multi-step planning and step revalidation | 304 |
 | V0.2.11 | Persistent supply intentions and fresh progress assessment | 327 |
+| V0.2.12 | Mature-crop discovery and guarded harvest | 352 |
 
-See `docs/V0.2.11.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.12.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -397,3 +400,21 @@ are consumed. Unknown inventory means unknown progress; a completed action is no
 proof of objective completion. Objectives expire from recall after 24 hours and
 are explicitly labelled cloud intent, not observed world facts. No free text,
 model rationale or generated commands are persisted. See [V0.2.11 notes](docs/V0.2.11.md).
+
+## V0.2.12 crop harvesting
+
+`scan_crops` observes up to 16 visible supported plants and their maturity.
+`harvest_crop` removes one ripe wheat, carrot, potato or beetroot plant with an
+empty hand, from nearby safe ground, and requires inbound server removal evidence.
+It does not walk onto farmland, predict yield, collect drops or replant.
+
+Autonomous-world mode enables this skill without per-area approval. Restricted
+mode uses `MC_FARMING_ENABLED`, `MC_FARMING_DIMENSION` and `MC_FARMING_AREA`,
+independently of mining/collection permissions. Mature shared-server crops must
+not be assumed unowned: permission is deployment policy, not ownership detection.
+
+Harvesting is allowed while hungry because it is motionless; it still requires
+known vitals, health at least 8, NORMAL risk and safe footing. Collection and other
+skills retain their existing separate preconditions. Replanting, soil preparation,
+cooking and a complete food-production loop remain unfinished. See
+[V0.2.12 notes](docs/V0.2.12.md). No live testing is requested at this stage.

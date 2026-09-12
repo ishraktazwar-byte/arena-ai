@@ -30,7 +30,7 @@ try {
   bot = mineflayer.createBot({ host: config.host, port: config.port, version: config.version, auth: config.auth, username: config.username || identity.name, profilesFolder: `runtime/auth/${config.agent}` });
   const budget = new SharedBudget('runtime/shared', config.dailyRequestLimit);
   const provider = config.aiEnabled ? new OpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY, reserve: () => budget.reserve() }) : null;
-  runtime = attachRuntime(bot, emit, { provider, identity, aiIntervalMs: config.aiIntervalMs, memory, miningPolicy: config.miningPolicy, workspacePolicy: config.workspacePolicy, collectionPolicy: config.collectionPolicy, navigationPolicy: config.navigationPolicy, operatingMode: config.operatingMode });
+  runtime = attachRuntime(bot, emit, { provider, identity, aiIntervalMs: config.aiIntervalMs, memory, miningPolicy: config.miningPolicy, workspacePolicy: config.workspacePolicy, collectionPolicy: config.collectionPolicy, navigationPolicy: config.navigationPolicy, farmingPolicy: config.farmingPolicy, operatingMode: config.operatingMode });
   terminal = createInterface({ input: process.stdin, output: process.stdout });
   let closing = false;
   async function close() {
@@ -53,7 +53,7 @@ try {
   bot.on('end', () => { void finalize().catch(() => { emit({ type: 'MEMORY-ERROR', code: 'memory_close_failed' }); process.exitCode = 1; }); });
   process.once('SIGINT', () => { void close(); });
   process.once('SIGTERM', () => { void close(); });
-  emit({ type: 'START', version: '0.2.11', message: 'Commands: status, step, stop, quit. Persistent local memory enabled; cloud planning opt-in. Live validation pending.' });
+  emit({ type: 'START', version: '0.2.12', message: 'Commands: status, step, stop, quit. Persistent local memory enabled; cloud planning opt-in. Live validation pending.' });
 } catch (error) {
   console.error(`Startup failed: ${error.code === 'ENOENT' ? 'Agent configuration not found' : error.code?.startsWith('memory_') ? error.code : 'Check local configuration and dependencies'}`);
   bot?.quit();

@@ -1,6 +1,6 @@
 import { validateGoal } from './goals.js';
 
-const READ_ONLY = new Set(['scan', 'scan_resources', 'craft_options', 'workspace_options', 'scan_items']);
+const READ_ONLY = new Set(['scan', 'scan_resources', 'craft_options', 'workspace_options', 'scan_items', 'scan_crops']);
 const LIMIT = 64;
 const RETENTION_MS = 60 * 60 * 1000;
 const BASE_MS = 10 * 60 * 1000;

@@ -1,6 +1,6 @@
 # Arena AI — implementation progress
 
-Updated for V0.2.11. This is a capability ledger, not a percentage or a promise that
+Updated for V0.2.12. This is a capability ledger, not a percentage or a promise that
 all the original instructions are complete. The remaining social/economic and
 world-building systems are much larger than individual completed tools.
 
@@ -17,6 +17,8 @@ world-building systems are much larger than individual completed tools.
 - Visible resource scanning; approved-region single-block mining; independent
   approved-region dropped-item pickup with inventory evidence; guarded starter
   crafting; independently approved crafting-table placement/use.
+- V0.2.12: visible crop maturity discovery and guarded harvesting of one mature
+  wheat/carrot/potato/beetroot plant, without yield or replanting assumptions.
 - V0.2.11: typed supply objectives persist across planning cycles/restarts, with
   scoped retention, current-inventory assessment and fresh planning instead of replay.
 - V0.2.10: cloud-selected plans of up to four typed steps with re-observation,
@@ -49,16 +51,17 @@ world-building systems are much larger than individual completed tools.
 
 ## Not implemented
 
-- Farming/food-production systems and wider building/settlement skills.
+- Replanting, soil preparation, growing/cooking and complete food-production
+  systems; wider building/settlement skills. Mature-plant harvesting alone exists.
 - Relationships, trust/reputation, social roles and durable interpersonal memory.
 - Resource accounting, trade, economies, institutions and diplomacy.
 - Multi-civilization emergence and end-to-end acceptance of the full platform.
 
 ## Verification and working agreement
 
-V0.2.11: 327 tests passed on Ubuntu/Windows with Node 22/24. Exact implementation
-and hosted CI proof for persistent supply objectives are recorded in
-[V0.2.11.md](V0.2.11.md). These are automated/simulated and pinned API-contract tests,
+V0.2.11 baseline: 327 tests passed on Ubuntu/Windows with Node 22/24. V0.2.12
+verification of crop harvesting is recorded in
+[V0.2.12.md](V0.2.12.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push

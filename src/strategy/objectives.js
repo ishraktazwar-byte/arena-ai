@@ -1,7 +1,7 @@
 import { craftItems } from '../../shared/tools/craft.js';
 
 // A deliberately finite vocabulary, not arbitrary text or an executable task.
-export const objectiveItems = Object.freeze([...new Set([...craftItems, 'cobblestone', 'coal', 'raw_iron', 'bread', 'carrot', 'apple', 'cooked_beef', 'baked_potato'])]);
+export const objectiveItems = Object.freeze([...new Set([...craftItems, 'cobblestone', 'coal', 'raw_iron', 'bread', 'carrot', 'apple', 'cooked_beef', 'baked_potato', 'wheat', 'potato', 'beetroot', 'wheat_seeds', 'beetroot_seeds'])]);
 export const OBJECTIVE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export function validObjective(value) {
   return value === null || (!!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join(',') === 'count,item' && objectiveItems.includes(value.item) && Number.isInteger(value.count) && value.count >= 1 && value.count <= 64);

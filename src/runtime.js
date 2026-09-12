@@ -1,3 +1,4 @@
+import { scanCrops } from '../shared/tools/farm.js';
 import { ControlArbiter } from './control.js';
 import { SurvivalController, assessRisk, survivalSnapshot } from './survival.js';
 import { CombatController } from './combat.js';
@@ -9,7 +10,7 @@ import { inspectWorkspaces } from '../shared/tools/workspace.js';
 import { scanItems } from '../shared/tools/collect.js';
 import { assessNeeds } from './strategy/needs.js';
 
-export function observe(bot, { workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, operatingMode = 'restricted' } = {}) {
+export function observe(bot, { workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, farmingPolicy = { enabled: false }, operatingMode = 'restricted' } = {}) {
   const position = bot.entity?.position;
   const slots = bot.inventory?.slots;
   const observation = {
@@ -26,6 +27,7 @@ export function observe(bot, { workspacePolicy = { enabled: false }, collectionP
     workspace: inspectWorkspaces(bot, workspacePolicy),
     droppedItems: scanItems(bot, collectionPolicy),
     nearbyResources: scanResources(bot),
+    farming: scanCrops(bot, farmingPolicy),
     inventory: bot.inventory?.items().map(item => ({ name: item.name, count: item.count })) ?? [],
     nearbyEntities: position ? Object.values(bot.entities || {}).filter(e => e !== bot.entity && e.position && e.position.distanceTo(position) <= 24).map(e => ({ id: e.id, name: e.name || e.username || 'unknown', distance: e.position.distanceTo(position), visibility: 'unverified' })) : []
   };
@@ -33,10 +35,10 @@ export function observe(bot, { workspacePolicy = { enabled: false }, collectionP
   return observation;
 }
 
-export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, navigationPolicy = { enabled: false }, operatingMode = 'restricted' } = {}) {
+export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, navigationPolicy = { enabled: false }, farmingPolicy = { enabled: false }, operatingMode = 'restricted' } = {}) {
   let ready = false;
-  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy });
-  const observeBody = body => observe(body, { workspacePolicy, collectionPolicy, operatingMode });
+  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, farmingPolicy });
+  const observeBody = body => observe(body, { workspacePolicy, collectionPolicy, farmingPolicy, operatingMode });
   const remember = (kind, observation) => {
     if (memory) void memory.remember(kind, observation).catch(() => emit({ type: 'MEMORY-ERROR', code: 'memory_write_failed' }));
   };

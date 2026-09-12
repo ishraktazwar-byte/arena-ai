@@ -22,8 +22,9 @@ export function parseConfig(env, agent) {
   const workspacePolicy = permission('MC_WORKSPACE');
   const collectionPolicy = permission('MC_COLLECTION');
   const navigationPolicy = permission('MC_NAVIGATION');
-  const restrictedSettingsIgnored = operatingMode === 'autonomous_world' && ['MC_MINING', 'MC_WORKSPACE', 'MC_COLLECTION', 'MC_NAVIGATION'].some(prefix => ['ENABLED', 'AREA', 'DIMENSION'].some(suffix => !!env[`${prefix}_${suffix}`]));
-  return { operatingMode, restrictedSettingsIgnored, miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
+  const farmingPolicy = permission('MC_FARMING');
+  const restrictedSettingsIgnored = operatingMode === 'autonomous_world' && ['MC_MINING', 'MC_WORKSPACE', 'MC_COLLECTION', 'MC_NAVIGATION', 'MC_FARMING'].some(prefix => ['ENABLED', 'AREA', 'DIMENSION'].some(suffix => !!env[`${prefix}_${suffix}`]));
+  return { operatingMode, restrictedSettingsIgnored, miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, farmingPolicy, worldId, aiEnabled: env.AI_ENABLED === 'true', aiIntervalMs, dailyRequestLimit, host: env.MC_HOST.trim(), port, version: env.MC_VERSION || '1.21.1', auth: env.MC_AUTH, username: env.MC_USERNAME?.trim() || null, agent };
 }
 
 function parseAreaPolicy(env, prefix) {
