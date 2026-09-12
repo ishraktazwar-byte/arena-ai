@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.5 — bounded dropped-item collection with server inventory confirmation.**
+**Current: V0.2.6 — needs-aware planning and bounded failed-action retry protection.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -24,6 +24,9 @@ An autonomous Minecraft-agent platform under development.
   without manual window setup. Late opening replies are fenced from later tasks.
 - Separate approved-area dropped-item collection, using short terrain-checked steps
   and both pickup reports and authoritative inventory deltas.
+- Advisory safety, recovery, nutrition, food reserve, inventory-space and gathering-tool
+  needs; exact failed-action cooldowns prevent immediate repetition without scripting
+  a fixed progression or expanding tool permissions.
 - Optional OpenRouter free-router planning, timeout/retry handling and a shared
   daily request budget. With AI off/unavailable, strategy falls back to scanning;
   local eating, combat and escape do not need an API key.
@@ -248,8 +251,9 @@ is not a complete competent-player combat model.
 | V0.2.3 | Starter crafting, guarded clicks and inventory verification | 130 |
 | V0.2.4 | Approved table placement/opening and late-window safety | 163 |
 | V0.2.5 | Approved dropped-item collection and pickup verification | 191 |
+| V0.2.6 | Needs-aware planning and failed-action cooldowns | 215 |
 
-See `docs/V0.2.5.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.6.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -270,3 +274,18 @@ its owners’ consent. Minecraft can automatically pick up nearby items even dur
 a failed/cancelled attempt; this tool cannot disable incidental pickups.
 
 See [V0.2.5 release notes and pending live checks](docs/V0.2.5.md).
+
+## V0.2.6 planning maturity
+
+The planner receives deterministic advisory needs, not a prescribed life story.
+Safety, recovery and nutrition remain owned by local reflexes. Supply needs do not
+authorize mining, collection, crafting workspaces, inventory disposal or new skills.
+A failed/blocked action at the same origin block, dimension and exact arguments
+gets a 10-minute cooldown, rising to 20 then at most 30 minutes on repeat failures.
+A repeated proposal during cooldown becomes a read-only scan, with no extra cloud
+request. Cancellation is not treated as failure. Retry history is bounded, local
+to the running controller and cleared on process restart; it is not durable world
+knowledge. See [V0.2.6 notes](docs/V0.2.6.md) for limits and automated verification.
+
+Live testing is deferred while implementation matures; passing offline tests is
+not a claim that the complete civilization platform is ready.

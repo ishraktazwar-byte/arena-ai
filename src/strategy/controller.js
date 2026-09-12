@@ -1,8 +1,10 @@
 import { catalog, validateGoal } from './goals.js';
+import { AttemptLedger } from './attempts.js';
 
 export class StrategyController {
   constructor({ provider, identity, observe, execute, emit, intervalMs = 300000, now = Date.now, memory = null, toolRegistry = null }) {
     Object.assign(this, { provider, identity, observe, execute, emit, intervalMs, now, memory, toolRegistry });
+    this.attempts = new AttemptLedger({ now });
     this.active = false;
     this.busy = false;
     this.epoch = 0;
@@ -42,7 +44,7 @@ export class StrategyController {
       let source = 'local_fallback';
       if (this.provider) {
         try {
-          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories }, { signal: this.controller.signal });
+          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories, deferredAttempts: this.attempts.context(observation) }, { signal: this.controller.signal });
           source = 'cloud';
         } catch (error) {
           if (this.active && epoch === this.epoch) this.emit({ type: 'STRATEGY-PROVIDER', code: ['missing_api_key', 'budget_exhausted', 'authentication_failed', 'network_or_timeout', 'cancelled', 'invalid_provider_output', 'provider_http_error'].includes(error.code) ? error.code : 'provider_unavailable' });
@@ -56,8 +58,18 @@ export class StrategyController {
       if (!this.active || epoch !== this.epoch || this.now() - started > 30000 || current.dimension !== observation.dimension || moved || current.health < observation.health) {
         this.emit({ type: 'STRATEGY-DISCARD', reason: 'stale_context' }); return;
       }
+      const retryAfterMs = this.attempts.remaining(goal, current);
+      if (retryAfterMs > 0) {
+        this.emit({ type: 'STRATEGY-DEFER', tool: goal.tool, reason: 'attempt_cooldown', retryAfterMs });
+        goal = { tool: 'scan', args: {}, reason: 'Observe instead of repeating a recently unsuccessful action.' };
+        goal = this.toolRegistry ? this.toolRegistry.validate(goal) : validateGoal(goal, catalog.map(tool => tool.name));
+        source = 'local_cooldown';
+      }
       this.emit({ type: 'STRATEGY-GOAL', tool: goal.tool, source }); // Never log raw model text.
-      const result = await this.execute(goal);
+      let result;
+      try { result = await this.execute(goal); }
+      catch { result = { state: 'FAILED', reason: 'execution_exception' }; }
+      if (this.active && epoch === this.epoch) this.attempts.record(goal, current, result.state);
       // Interrupted goals remain historical outcomes, not resumable commands.
       await this.remember('goal_result', epoch === this.epoch ? this.observe() : observation, { tool: goal.tool, state: result.state });
       if (!this.active || epoch !== this.epoch) return;

@@ -1,5 +1,5 @@
 import { ControlArbiter } from './control.js';
-import { SurvivalController } from './survival.js';
+import { SurvivalController, assessRisk, survivalSnapshot } from './survival.js';
 import { CombatController } from './combat.js';
 import { StrategyController } from './strategy/controller.js';
 import { executeGoal, createToolRegistry } from '../shared/tools/index.js';
@@ -7,10 +7,15 @@ import { scanResources } from '../shared/tools/resources.js';
 import { craftOptions } from '../shared/tools/craft.js';
 import { inspectWorkspaces } from '../shared/tools/workspace.js';
 import { scanItems } from '../shared/tools/collect.js';
+import { assessNeeds } from './strategy/needs.js';
 
 export function observe(bot, { workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false } } = {}) {
   const position = bot.entity?.position;
-  return {
+  const slots = bot.inventory?.slots;
+  const observation = {
+    risk: assessRisk(survivalSnapshot(bot)),
+    inventoryKnown: typeof bot.inventory?.items === 'function',
+    inventoryCapacity: { emptyNormalSlots: Array.isArray(slots) && slots.length >= 45 ? slots.slice(9, 45).filter(slot => slot == null).length : null },
     observedAt: new Date().toISOString(), health: bot.health ?? null, food: bot.food ?? null,
     oxygen: bot.oxygenLevel ?? null,
     position: position ? { x: position.x, y: position.y, z: position.z } : null,
@@ -23,6 +28,8 @@ export function observe(bot, { workspacePolicy = { enabled: false }, collectionP
     inventory: bot.inventory?.items().map(item => ({ name: item.name, count: item.count })) ?? [],
     nearbyEntities: position ? Object.values(bot.entities || {}).filter(e => e !== bot.entity && e.position && e.position.distanceTo(position) <= 24).map(e => ({ id: e.id, name: e.name || e.username || 'unknown', distance: e.position.distanceTo(position), visibility: 'unverified' })) : []
   };
+  observation.needs = assessNeeds(observation);
+  return observation;
 }
 
 export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false } } = {}) {
