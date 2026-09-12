@@ -2,7 +2,8 @@ import { ControlArbiter } from './control.js';
 import { SurvivalController } from './survival.js';
 import { CombatController } from './combat.js';
 import { StrategyController } from './strategy/controller.js';
-import { executeGoal } from '../shared/tools/index.js';
+import { executeGoal, createToolRegistry } from '../shared/tools/index.js';
+import { scanResources } from '../shared/tools/resources.js';
 
 export function observe(bot) {
   const position = bot.entity?.position;
@@ -12,13 +13,15 @@ export function observe(bot) {
     position: position ? { x: position.x, y: position.y, z: position.z } : null,
     dimension: bot.game?.dimension ?? null, timeOfDay: bot.time?.timeOfDay ?? null,
     equippedItem: bot.heldItem?.name ?? null,
+    nearbyResources: scanResources(bot),
     inventory: bot.inventory?.items().map(item => ({ name: item.name, count: item.count })) ?? [],
     nearbyEntities: position ? Object.values(bot.entities || {}).filter(e => e !== bot.entity && e.position && e.position.distanceTo(position) <= 24).map(e => ({ id: e.id, name: e.name || e.username || 'unknown', distance: e.position.distanceTo(position), visibility: 'unverified' })) : []
   };
 }
 
-export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null } = {}) {
+export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false } } = {}) {
   let ready = false;
+  const toolRegistry = createToolRegistry({ miningPolicy });
   const remember = (kind, observation) => {
     if (memory) void memory.remember(kind, observation).catch(() => emit({ type: 'MEMORY-ERROR', code: 'memory_write_failed' }));
   };
@@ -34,7 +37,7 @@ export function attachRuntime(bot, emit, { provider = null, identity = {}, aiInt
   });
   const survival = new SurvivalController(bot, arbiter, emit);
   const combat = new CombatController(bot, arbiter, emit);
-  strategy = new StrategyController({ provider, identity, observe: () => observe(bot), execute: goal => executeGoal(bot, arbiter, goal, { observe, emit }), emit, intervalMs: aiIntervalMs, memory });
+  strategy = new StrategyController({ provider, identity, observe: () => observe(bot), execute: goal => executeGoal(bot, arbiter, goal, { observe, emit, registry: toolRegistry }), emit, intervalMs: aiIntervalMs, memory, toolRegistry });
   arbiter.setSafetyFloor(1000, 'not_spawned');
   bot.on('physicsTick', () => { if (ready) { survival.tick(); combat.tick(); if (arbiter.safetyFloor === 0 && !arbiter.current) void strategy.tick(); } });
   bot.on('spawn', () => { arbiter.cancel('spawn'); ready = true; survival.start(); combat.start(); strategy.start(); survival.tick(); const observation = observe(bot); remember('spawn', observation); emit({ type: 'SPAWN', observation }); });

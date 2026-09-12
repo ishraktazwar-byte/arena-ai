@@ -42,10 +42,10 @@ export class ControlArbiter {
     });
     this.emit({ type: 'ACTION', sessionId: session.id, owner, state: 'RUNNING' });
     try {
-      await Promise.race([Promise.resolve().then(() => execute({ signal, guard, sessionId: session.id })), aborted]);
+      const result = await Promise.race([Promise.resolve().then(() => execute({ signal, guard, sessionId: session.id })), aborted]);
       if (signal.aborted) return { state: 'CANCELLED', reason: session.cancelReason };
       session.state = 'COMPLETED';
-      return { state: 'COMPLETED' };
+      return result === undefined ? { state: 'COMPLETED' } : { state: 'COMPLETED', result };
     } catch {
       session.state = signal.aborted ? 'CANCELLED' : 'FAILED';
       return { state: session.state, reason: session.cancelReason || 'execution failed' };

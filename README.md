@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.1 — persistent memory and validated strategy foundation.**
+**Current: V0.2.2 — resource scanning and guarded single-block mining.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -13,14 +13,17 @@ An autonomous Minecraft-agent platform under development.
 - Basic eating, conservative risk gates and bounded flat-ground escape.
 - Stable melee targets, equipment selection, safe approach and final attack checks.
 - Persistent local observations, deaths and goal outcomes with bounded retrieval.
-- Validated `scan`, `wait`, and `move_step` strategic tools—no generated JavaScript.
+- A runtime tool catalog: `scan`, `scan_resources`, `wait`, `move_step`, and opt-in
+  `mine`—no generated JavaScript.
+- Visible nearby resource observations and region-limited single-block mining
+  with equipment, geometry, cancellation and server-confirmation checks.
 - Optional OpenRouter free-router planning, timeout/retry handling and a shared
   daily request budget. With AI off/unavailable, strategy falls back to scanning;
   local eating, combat and escape do not need an API key.
 
 **This is not a finished civilization simulation or live-validated survival bot.**
-There is no ranged combat, shield tactic, resource gathering, settlement, economy
-or diplomacy system yet. Memory currently stores local events, not a complete
+There is no ranged combat, shield tactic, complete gathering workflow, crafting,
+farming, settlement, economy or diplomacy system yet. Memory currently stores local events, not a complete
 resource map, social model or learned skill system. No idle-shutdown avoidance.
 
 ## Windows CMD setup
@@ -70,6 +73,39 @@ budget lock fails closed: after stopping **all** agents, inspect and remove only
 `runtime/shared/request-budget.lock` if a prior process crashed. Do not delete the
 budget JSON to bypass a used quota.
 
+### Resource scanning and mining permission
+
+Observations now include at most 16 sampled line-of-sight resource blocks within
+four blocks of the eye position. `scan_resources` is read-only. The search is
+bounded and excludes hidden resources from planning context.
+
+`mine` is **disabled by default**, and is not advertised to the planner while
+disabled. To use it, configure an owner-approved resource area in local `.env`:
+
+```text
+MC_MINING_ENABLED=true
+MC_MINING_DIMENSION=overworld
+MC_MINING_AREA=minX,minY,minZ,maxX,maxY,maxZ
+```
+
+Replace those six placeholders with integer block bounds. There is deliberately
+no authorized area by default. Exclude homes, shared storage and player builds:
+block type cannot prove ownership or distinguish natural stone/logs from placed
+blocks. The active tool catalog includes the approved bounds and dimension;
+model arguments cannot expand them.
+
+Mining attempts **one already-visible block**, without movement or repeat loops.
+It rejects below-foot/above-head targets, the body column, unsupported terrain,
+nearby threats, insufficient equipment, nearby fluids/falling blocks, and unknown
+neighbors. It rechecks after equipping/aiming and while digging. Only supported
+logs, stone variants and overworld ores are eligible.
+
+The result distinguishes a server `block_change` reporting air from Mineflayer's
+optimistic local cache. A server using only another packet form may yield an
+unconfirmed/failed result even after a real break. Inventory increases are reported
+as observations, **not** guaranteed drops from this action. No automatic collection,
+crafting, ore expedition, tunnel creation or multi-agent block reservation yet.
+
 ### Persistent memory
 
 `MC_WORLD_ID=arena-world-1` identifies the actual world, not its temporary network
@@ -88,6 +124,9 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
+Memory schema v2 reads v1 snapshots and upgrades on the next write; older releases
+will refuse v2 rather than silently interpreting newer tool history. Resource
+locations appear in current observations but are not yet persisted as a world map.
 When cloud AI is enabled, retrieved local records are sent as planning context.
 These files still contain private gameplay history/locations; keep them local.
 
@@ -123,8 +162,9 @@ is not a complete competent-player combat model.
 | V0.1.3 | Stable local melee | 45 |
 | V0.2.0 | Validated goals and optional provider | 62 |
 | V0.2.1 | Persistent structured memory and retrieval | 81 |
+| V0.2.2 | Resource scanning, tool registry and guarded mining | 107 |
 
-See `docs/V0.2.1.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.2.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.

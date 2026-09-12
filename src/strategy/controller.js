@@ -1,8 +1,8 @@
 import { catalog, validateGoal } from './goals.js';
 
 export class StrategyController {
-  constructor({ provider, identity, observe, execute, emit, intervalMs = 300000, now = Date.now, memory = null }) {
-    Object.assign(this, { provider, identity, observe, execute, emit, intervalMs, now, memory });
+  constructor({ provider, identity, observe, execute, emit, intervalMs = 300000, now = Date.now, memory = null, toolRegistry = null }) {
+    Object.assign(this, { provider, identity, observe, execute, emit, intervalMs, now, memory, toolRegistry });
     this.active = false;
     this.busy = false;
     this.epoch = 0;
@@ -42,14 +42,15 @@ export class StrategyController {
       let source = 'local_fallback';
       if (this.provider) {
         try {
-          goal = await this.provider.plan({ identity: this.identity, observation, tools: catalog, recentResults: this.recent.slice(-5), memories }, { signal: this.controller.signal });
+          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories }, { signal: this.controller.signal });
           source = 'cloud';
         } catch (error) {
           if (this.active && epoch === this.epoch) this.emit({ type: 'STRATEGY-PROVIDER', code: ['missing_api_key', 'budget_exhausted', 'authentication_failed', 'network_or_timeout', 'cancelled', 'invalid_provider_output', 'provider_http_error'].includes(error.code) ? error.code : 'provider_unavailable' });
         }
       }
       // A safe read-only fallback does not invent long-term goals or movement.
-      goal = validateGoal(goal || { tool: 'scan', args: {}, reason: 'Observe while cloud planning is unavailable.' });
+      const proposed = goal || { tool: 'scan', args: {}, reason: 'Observe while cloud planning is unavailable.' };
+      goal = this.toolRegistry ? this.toolRegistry.validate(proposed) : validateGoal(proposed, catalog.map(tool => tool.name));
       const current = this.observe();
       const moved = observation.position && current.position && Math.hypot(current.position.x - observation.position.x, current.position.y - observation.position.y, current.position.z - observation.position.z) > 2;
       if (!this.active || epoch !== this.epoch || this.now() - started > 30000 || current.dimension !== observation.dimension || moved || current.health < observation.health) {

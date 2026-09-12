@@ -199,3 +199,26 @@ test('lifecycle invalidation during slow observation storage prevents provider r
   strategy.stop(); release(); await pending;
   assert.equal(requests, 0);
 });
+test('legacy schema-v1 snapshots migrate on write before recording new tool outcomes', async t => {
+  const f = await fixture(t);
+  await f.store.remember('spawn', observation); await f.store.close();
+  const path = join(f.directory, 'memory.json');
+  const legacy = JSON.parse(await readFile(path, 'utf8')); legacy.schemaVersion = 1;
+  await writeFile(path, JSON.stringify(legacy));
+  const reopened = await MemoryStore.open(f.settings);
+  try {
+    assert.equal(reopened.size, 1);
+    await reopened.remember('goal_result', observation, { tool: 'mine', state: 'FAILED' });
+    const saved = JSON.parse(await readFile(path, 'utf8'));
+    assert.equal(saved.schemaVersion, 2);
+    assert.equal(saved.records.at(-1).data.tool, 'mine');
+  } finally { await reopened.close(); }
+});
+test('resource scan outcomes survive restart as history, not commands', async t => {
+  const f = await fixture(t);
+  await f.store.remember('goal_result', observation, { tool: 'scan_resources', state: 'COMPLETED' });
+  await f.store.close();
+  const reopened = await MemoryStore.open(f.settings);
+  try { assert.equal(reopened.retrieve(observation)[0].data.tool, 'scan_resources'); }
+  finally { await reopened.close(); }
+});
