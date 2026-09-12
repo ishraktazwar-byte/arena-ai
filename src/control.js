@@ -6,6 +6,11 @@ export class ControlArbiter {
     this.stopBody = stopBody;
     this.emit = emit;
     this.current = null;
+    this.safetyFloor = 0;
+  }
+  setSafetyFloor(priority, reason) {
+    this.safetyFloor = priority;
+    if (this.current && this.current.priority < priority) this.cancel(reason);
   }
   cancel(reason = 'cancelled') {
     const session = this.current;
@@ -19,6 +24,7 @@ export class ControlArbiter {
   }
   async run(owner, priority, execute, timeoutMs = 10000) {
     if (!Number.isFinite(priority) || !Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('Invalid session limits');
+    if (priority < this.safetyFloor) return { state: 'BLOCKED', reason: 'safety_gate' };
     if (this.current && priority <= this.current.priority) return { state: 'BLOCKED' };
     this.cancel('preempted');
     const session = { id: randomUUID(), owner, priority, state: 'RUNNING', startedAt: Date.now(), controller: new AbortController() };

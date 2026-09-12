@@ -1,4 +1,5 @@
 import { ControlArbiter } from './control.js';
+import { SurvivalController } from './survival.js';
 
 export function observe(bot) {
   const position = bot.entity?.position;
@@ -21,9 +22,12 @@ export function attachRuntime(bot, emit) {
     bot.deactivateItem();
   };
   const arbiter = new ControlArbiter(stopBody, emit);
-  bot.on('spawn', () => { arbiter.cancel('spawn'); ready = true; emit({ type: 'SPAWN', observation: observe(bot) }); });
-  bot.on('death', () => { ready = false; arbiter.cancel('death'); stopBody(); emit({ type: 'DEATH' }); });
-  bot.on('end', () => { ready = false; arbiter.cancel('disconnect'); emit({ type: 'DISCONNECTED' }); });
+  const survival = new SurvivalController(bot, arbiter, emit);
+  arbiter.setSafetyFloor(1000, 'not_spawned');
+  bot.on('physicsTick', () => { if (ready) survival.tick(); });
+  bot.on('spawn', () => { arbiter.cancel('spawn'); ready = true; survival.start(); survival.tick(); emit({ type: 'SPAWN', observation: observe(bot) }); });
+  bot.on('death', () => { ready = false; survival.stop(); arbiter.cancel('death'); stopBody(); emit({ type: 'DEATH' }); });
+  bot.on('end', () => { ready = false; survival.stop(); arbiter.cancel('disconnect'); emit({ type: 'DISCONNECTED' }); });
   bot.on('health', () => emit({ type: 'HEALTH', health: bot.health, food: bot.food }));
   // Do not print raw provider/network errors or server-supplied text: they may contain secrets.
   bot.on('error', () => emit({ type: 'CONNECTION_ERROR', message: 'Connection error; verify server and authentication configuration.' }));
@@ -43,6 +47,6 @@ export function attachRuntime(bot, emit) {
         });
       }, 1000);
     },
-    close() { ready = false; arbiter.cancel('shutdown'); stopBody(); bot.quit(); }
+    close() { ready = false; survival.stop(); arbiter.cancel('shutdown'); stopBody(); bot.quit(); }
   };
 }

@@ -45,7 +45,7 @@ test('failed action cleans up', async () => {
 test('death invalidates movement; respawn does not resume intent', async () => {
   const bot = new EventEmitter();
   const controls = [];
-  Object.assign(bot, { clearControlStates: () => controls.push('clear'), stopDigging() {}, deactivateItem() {}, quit() {}, setControlState: (...args) => controls.push(args) });
+  Object.assign(bot, { health: 20, food: 20, clearControlStates: () => controls.push('clear'), stopDigging() {}, deactivateItem() {}, quit() {}, setControlState: (...args) => controls.push(args) });
   const runtime = attachRuntime(bot, () => {});
   assert.equal((await runtime.step()).state, 'BLOCKED');
   bot.emit('spawn');

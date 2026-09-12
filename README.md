@@ -1,9 +1,9 @@
 # Arena AI
 
-Minecraft civilization experiment. **V0.1.0 — foundation only.**
+Minecraft civilization experiment. **V0.1.1 — local risk gates and basic eating (offline-tested).**
 
-LLM chooses goals; the local body executes them safely. This release has no LLM,
-autonomous survival, combat, reconnect loop, or idle-shutdown avoidance.
+LLM chooses goals; the local body executes them safely. This release has basic automatic eating and emergency interruption, but no LLM,
+escape navigation, combat, reconnect loop, or idle-shutdown avoidance.
 Do not leave these agents unattended in survival mode yet.
 
 ## Windows CMD setup
@@ -42,4 +42,8 @@ Never distribute either in ZIPs. Run from the project directory.
 
 `npm run check` checks syntax. `npm test` covers configuration, action ownership,
 preemption, timeout, stale callbacks, cleanup, and death/respawn behavior with a
-simulated body. See `docs/V0.1.0.md` for status and live-test gates.
+simulated body. See `docs/V0.1.1.md` for current validation and limitations;
+`docs/V0.1.0.md` records the unresolved live connection issue.
+
+Emergency halt only interrupts unsafe ongoing work. It does **not** get the bot
+out of lava, away from a creeper, or to the surface. Stay supervised.
