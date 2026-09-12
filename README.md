@@ -1,9 +1,10 @@
 # Arena AI
 
-Minecraft civilization experiment. **V0.1.2 — bounded ground escape and basic eating (offline-tested).**
+Minecraft civilization experiment. **V0.1.3 — stable melee, bounded escape and eating (offline-tested).**
 
 LLM chooses goals; the local body executes them safely. This release has basic automatic eating, emergency interruption, and conservative
-one-block ground escape. It has no LLM, combat, reconnect loop, or idle-shutdown avoidance.
+one-block ground escape and basic stable melee. It has no LLM, ranged combat,
+shield tactics, reconnect loop, or idle-shutdown avoidance.
 Do not leave these agents unattended in survival mode yet.
 
 ## Windows CMD setup
@@ -42,7 +43,7 @@ Never distribute either in ZIPs. Run from the project directory.
 
 `npm run check` checks syntax. `npm test` covers configuration, action ownership,
 preemption, timeout, stale callbacks, cleanup, and death/respawn behavior with a
-simulated body. See `docs/V0.1.2.md` for current validation and limitations;
+simulated body. See `docs/V0.1.3.md` for current validation and limitations;
 `docs/V0.1.0.md` records the unresolved live connection issue.
 
 Ground escape requires known, flat, full-block support and a safer adjacent step.
