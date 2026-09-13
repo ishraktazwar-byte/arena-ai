@@ -1,3 +1,4 @@
+import { scanProductionSites } from './farming/production.js';
 import { FarmManager } from './farming/manager.js';
 import { foodReserves } from './farming/reservations.js';
 import { scanCrops } from '../shared/tools/farm.js';
@@ -32,6 +33,7 @@ export function observe(bot, { workspacePolicy = { enabled: false }, collectionP
     droppedItems: scanItems(bot, collectionPolicy),
     nearbyResources: scanResources(bot),
     farming: scanCrops(bot, farmingPolicy),
+    farmDevelopment: scanProductionSites(bot, farmingPolicy, workspacePolicy),
     inventory: bot.inventory?.items().map(item => ({ name: item.name, count: item.count })) ?? [],
     nearbyEntities: position ? Object.values(bot.entities || {}).filter(e => e !== bot.entity && e.position && e.position.distanceTo(position) <= 24).map(e => ({ id: e.id, name: e.name || e.username || 'unknown', distance: e.position.distanceTo(position), visibility: 'unverified' })) : []
   };
@@ -59,7 +61,7 @@ export function attachRuntime(bot, emit, { provider = null, identity = {}, aiInt
   const survival = new SurvivalController(bot, arbiter, emit);
   const combat = new CombatController(bot, arbiter, emit);
   strategy = new StrategyController({ provider, identity, observe: () => observeBody(bot), execute: goal => executeGoal(bot, arbiter, goal, { observe: observeBody, emit, registry: toolRegistry, farms }), emit, intervalMs: aiIntervalMs, memory, toolRegistry });
-  farms = new FarmManager({ bot, memory, policies: { farming: structuredClone(farmingPolicy), collection: structuredClone(collectionPolicy), navigation: structuredClone(navigationPolicy) }, execute: goal => executeGoal(bot, arbiter, goal, { observe: observeBody, emit, registry: toolRegistry, farms }), emit });
+  farms = new FarmManager({ bot, memory, policies: { workspace: structuredClone(workspacePolicy), farming: structuredClone(farmingPolicy), collection: structuredClone(collectionPolicy), navigation: structuredClone(navigationPolicy) }, execute: goal => executeGoal(bot, arbiter, goal, { observe: observeBody, emit, registry: toolRegistry, farms }), emit });
   arbiter.setSafetyFloor(1000, 'not_spawned');
   bot.on('physicsTick', () => { if (ready) { survival.tick(); combat.tick(); if (arbiter.safetyFloor === 0 && !arbiter.current && !strategy.busy && !farms.busy) { if (Date.now() >= strategy.nextAt) void strategy.tick(); else void farms.tick(); } } });
   bot.on('spawn', () => { arbiter.cancel('spawn'); ready = true; survival.start(); combat.start(); strategy.start(); if (provider) farms.start(); survival.tick(); const observation = observeBody(bot); remember('spawn', observation); emit({ type: 'SPAWN', observation }); });

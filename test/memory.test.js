@@ -210,7 +210,7 @@ test('legacy schema-v1 snapshots migrate on write before recording new tool outc
     assert.equal(reopened.size, 1);
     await reopened.remember('goal_result', observation, { tool: 'mine', state: 'FAILED' });
     const saved = JSON.parse(await readFile(path, 'utf8'));
-    assert.equal(saved.schemaVersion, 12);
+    assert.equal(saved.schemaVersion, 13);
     assert.equal(saved.records.at(-1).data.tool, 'mine');
   } finally { await reopened.close(); }
 });
@@ -230,7 +230,7 @@ test('schema-v2 snapshots migrate to the current schema for crafting history', a
   const reopened = await MemoryStore.open(f.settings);
   try {
     await reopened.remember('goal_result', observation, { tool: 'craft', state: 'CANCELLED' });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 12);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 13);
     assert.equal(reopened.retrieve(observation).some(r => r.data.tool === 'craft'), true);
   } finally { await reopened.close(); }
 });
@@ -243,7 +243,7 @@ test('schema-v3 history migrates before storing workspace outcomes', async t => 
   try {
     await reopened.remember('goal_result', observation, { tool: 'place_crafting_table', state: 'COMPLETED' });
     await reopened.remember('goal_result', observation, { tool: 'craft_at_table', state: 'CANCELLED' });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 12);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 13);
     assert.ok(reopened.retrieve(observation).some(record => record.data.tool === 'craft_at_table'));
   } finally { await reopened.close(); }
 });
@@ -256,7 +256,7 @@ test('schema-v4 snapshots migrate and preserve collection outcomes through resta
   try {
     await reopened.remember('goal_result', observation, { tool: 'scan_items', state: 'COMPLETED' });
     await reopened.remember('goal_result', observation, { tool: 'collect_items', state: 'CANCELLED' });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 12);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 13);
   } finally { await reopened.close(); }
   const again = await MemoryStore.open(f.settings);
   try { assert.ok(again.retrieve(observation).some(record => record.data.tool === 'collect_items' && record.data.state === 'CANCELLED')); }
@@ -272,7 +272,7 @@ test('schema-v6 resource and event history migrates before storing navigation ou
   const reopened = await MemoryStore.open(f.settings);
   try {
     await reopened.remember('goal_result', observation, { tool: 'navigate_local', state: 'CANCELLED' });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 12);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 13);
   } finally { await reopened.close(); }
   const again = await MemoryStore.open(f.settings);
   try {
@@ -292,7 +292,7 @@ test('schema-v8 objectives migrate before storing farming outcomes and crop-supp
     await reopened.remember('goal_result', observation, { tool: 'scan_crops', state: 'COMPLETED' });
     await reopened.remember('goal_result', observation, { tool: 'harvest_crop', state: 'FAILED' });
     await reopened.remember('objective', observation, { objective: { item: 'wheat_seeds', count: 8 } });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 12);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 13);
   } finally { await reopened.close(); }
   const again = await MemoryStore.open(f.settings);
   try {
@@ -308,7 +308,7 @@ test('schema-v9 farming history migrates before storing planting outcomes', asyn
   const reopened = await MemoryStore.open(f.settings);
   try {
     await reopened.remember('goal_result', observation, { tool: 'plant_crop', state: 'CANCELLED' });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 12);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 13);
   } finally { await reopened.close(); }
   const again = await MemoryStore.open(f.settings);
   try {
@@ -324,7 +324,7 @@ test('schema-v10 planting history migrates while nearby collection results persi
   const reopened = await MemoryStore.open(f.settings);
   try {
     await reopened.remember('goal_result', observation, { tool: 'collect_nearby', state: 'COMPLETED', result: { entityId: 101, entityUuid: 'not-for-replay' } });
-    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 12);
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).schemaVersion, 13);
   } finally { await reopened.close(); }
   const again = await MemoryStore.open(f.settings);
   try {

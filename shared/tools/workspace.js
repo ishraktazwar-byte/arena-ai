@@ -1,3 +1,4 @@
+import { farmFootprint } from '../../src/farming/terrain.js';
 import { bindBodySession } from '../../src/control.js';
 import { permitsBlock } from '../../src/permissions.js';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
@@ -16,7 +17,7 @@ export function workspaceAllowed(policy, dimension, p) {
 }
 function checkBody(bot) {
   if (bot.version !== '1.21.1' || bot._client?.state !== 'play') fail('workspace_protocol_unavailable');
-  if (!bot.entity?.onGround || bot.health < 12 || bot.food < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !safeFootprint(worldReader(bot), bot.entity.position)) fail('unsafe_workspace_body');
+  if (!bot.entity?.onGround || bot.health < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !farmFootprint(worldReader(bot), bot.entity.position)) fail('unsafe_workspace_body');
   if (coordinators.get(bot)?.quarantined) fail('workspace_reconnect_required');
 }
 function clearInventory(bot) {
@@ -41,7 +42,7 @@ function topFaceVisible(bot, block) {
 export function checkTable(bot, p, policy, stateId) {
   checkBody(bot);
   if (!workspaceAllowed(policy, bot.game?.dimension, p)) fail('outside_workspace_permission');
-  if (p.y !== Math.floor(bot.entity.position.y)) fail('workspace_elevation_unsupported');
+  if (p.y !== Math.round(bot.entity.position.y)) fail('workspace_elevation_unsupported');
   const block = readBlock(bot, p);
   if (block?.name !== 'crafting_table' || stateId !== undefined && block.stateId !== stateId) fail('workspace_table_changed');
   if (!topFaceVisible(bot, block)) fail('workspace_table_not_visible');
@@ -190,7 +191,7 @@ class TableWindows {
         if (!pending?.sent || pending.window || pending.ambiguous) return;
         try {
           pending.session.guard(() => {});
-          if (!Number.isInteger(window.id) || window.id <= 0 || pending.packetId !== window.id || window.type !== 'minecraft:crafting' || this.bot.currentWindow !== window) fail('workspace_unexpected_window');
+          if (!Number.isInteger(window.id) || window.id <= 0 || pending.packetId !== window.id || window.type !== pending.expectedType || this.bot.currentWindow !== window) fail('workspace_unexpected_window');
           pending.window = window;
           pending.resolve(window);
         } catch (error) { pending.reject(error); }
@@ -217,12 +218,12 @@ class TableWindows {
       if (!this.closed && this.quarantined && this.bot.currentWindow && this.bot.currentWindow !== window) this.closeStale(this.bot.currentWindow);
     });
   }
-  begin(session) {
+  begin(session, expectedType = 'minecraft:crafting') {
     if (this.quarantined || this.closed) fail('workspace_reconnect_required');
     if (this.pending) fail('workspace_open_already_pending');
     let resolve, reject;
     const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-    const pending = { session, sent: false, packetId: null, window: null, resolve, reject, promise };
+    const pending = { session, expectedType, sent: false, packetId: null, window: null, resolve, reject, promise };
     this.pending = pending;
     session.addCleanup(() => {
       if (this.pending !== pending) return;
@@ -280,4 +281,33 @@ export async function craftAtTable(bot, args, policy, session, { arbiter, emit =
   const result = await craft(bot, { item: args.item }, session);
   session.guard(() => {});
   return { tablePosition: { x: args.x, y: args.y, z: args.z }, ...result };
+}
+
+export function checkFurnace(bot, p, policy) {
+  checkBody(bot);
+  if (!workspaceAllowed(policy, bot.game?.dimension, p)) fail('outside_workspace_permission');
+  const block = readBlock(bot, p);
+  if (block?.name !== 'furnace' || !topFaceVisible(bot, block)) fail('cooking_furnace_unreachable');
+  return block;
+}
+
+// Furnace and table opens share the same quarantine coordinator: their packets
+// cannot be correlated to locations and must never cross-bind after cancellation.
+export async function openCookingWindow(bot, p, policy, session, { arbiter, emit = () => {}, responseTimeoutMs = 1500 } = {}) {
+  if (!arbiter || !bot.closeWindow) fail('workspace_control_unavailable');
+  const check = () => {
+    session.guard(() => {}); return checkFurnace(bot, p, policy);
+  };
+  let block = check(); clearInventory(bot);
+  if (bot.heldItem) session.guard(() => bot.setQuickBarSlot(emptyHotbar(bot)));
+  await waitBounded(session.guard(() => bot.lookAt(block.position.offset(0.5, 1, 0.5), true)), session.signal, responseTimeoutMs);
+  block = check(); clearInventory(bot);
+  if (bot.heldItem) fail('workspace_hand_not_empty');
+  const pending = getCoordinator(bot, arbiter, emit).begin(session, 'minecraft:furnace');
+  pending.promise.catch(() => {});
+  pending.sent = true; sendTopInteraction(bot, block, session);
+  const window = await waitBounded(pending.promise, session.signal, responseTimeoutMs);
+  check();
+  if (window !== bot.currentWindow) fail('workspace_window_changed');
+  return window;
 }

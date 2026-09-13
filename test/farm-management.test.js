@@ -207,7 +207,7 @@ test('farm intentions survive restart without stored phases, targets or commands
   assert.deepEqual(next.retrieveFarm({ dimension: 'overworld' }), intent); assert.equal(next.retrieveFarm({ dimension: 'the_nether' }), null);
   assert.equal(next.retrieve({ dimension: 'overworld' }).length, 0); await next.close();
   const other = await MemoryStore.open({ ...settings, worldId: 'other' }); assert.equal(other.retrieveFarm({ dimension: 'overworld' }), null); await other.close();
-  const raw = JSON.parse(await readFile(join(settings.directory, 'memory.json'), 'utf8')); assert.equal(raw.schemaVersion, 12);
+  const raw = JSON.parse(await readFile(join(settings.directory, 'memory.json'), 'utf8')); assert.equal(raw.schemaVersion, 13);
   assert.deepEqual(Object.keys(raw.records[0].data), ['farm']);
 });
 test('schema eleven migrates before writing farm intentions and stop tombstones persist', async t => {

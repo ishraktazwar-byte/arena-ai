@@ -1,6 +1,6 @@
 # Arena AI — implementation progress
 
-Updated for V0.2.15. This is a capability ledger, not a percentage or a promise that
+Updated for V0.2.16. This is a capability ledger, not a percentage or a promise that
 all the original instructions are complete. The remaining social/economic and
 world-building systems are much larger than individual completed tools.
 
@@ -17,10 +17,14 @@ world-building systems are much larger than individual completed tools.
 - Visible resource scanning; approved-region single-block mining; independent
   approved-region dropped-item pickup with inventory evidence; guarded starter
   crafting; independently approved crafting-table placement/use.
+- V0.2.16: connected ordinary-soil farm development, contained irrigation, hoe
+  tilling, supported food processing and actual growth monitoring/recovery. A
+  limited-stock soil → water → plant → harvest → cook cycle is fixture-tested.
+  Material/terrain limits and random-tick uncertainty remain explicit.
 - V0.2.15: persistent prepared-plot farm maintenance; seed reserves with survival
   override; fresh-world recovery after partial work and restart; crop-safe local
   farmland traversal. Repeated production, stock-based idle/resumption and runtime
-  scheduling are covered by automated tests. No irrigation/construction is claimed.
+  scheduling are covered by automated tests. That older goal remains maintenance-only.
 - V0.2.14: fresh desired-item drop binding lets short plans collect newly appeared
   items without future entity IDs or another cloud call. A farm-edge harvest →
   pickup → replant sequence is fixture-tested without carried planting reserves.
@@ -49,11 +53,12 @@ world-building systems are much larger than individual completed tools.
 - Movement now includes bounded solid-ground/farmland/crop routes, not
   general navigation, stairs, jumps or long-distance gathering.
 - Gathering has bounded component tools, not a complete autonomous supply chain.
-  Crafting covers a starter subset, not full recipes, smelting or food production.
+  Crafting and furnace processing cover finite starter/food recipes, not the full
+  recipe set or a complete exploration-to-supply economy.
 - Needs are advisory thresholds, not learned motivations. Resource memory is a
   sparse sighting index, not a complete terrain/resource map or ownership model.
 - Typed single actions, bounded ephemeral plans and persistent supply intentions
-  exist. Prepared-farm maintenance reconciles partial work without replay; broader
+  exist. Local farm development/maintenance reconciles work without replay; broader
   long-horizon goals and learned skills remain incomplete. General plan recovery
   summaries are advisory, not automatic resumption of arbitrary tasks.
 - Two starter profiles exist. The requested larger population, social coordination
@@ -61,19 +66,17 @@ world-building systems are much larger than individual completed tools.
 
 ## Not implemented
 
-- Farm construction/soil preparation, irrigation, lighting installation, cooking,
-  storage and complete food-production systems; wider building and settlements.
-  Existing prepared-plot maintenance is implemented, but live sustainability and
-  multi-agent farm coordination remain unverified/unimplemented respectively.
+- General construction, storage, settlements, arbitrary-terrain farms and
+  long-distance resource logistics. Local farm production is implemented; live
+  sustainability remains unverified and multi-agent farm coordination is absent.
 - Relationships, trust/reputation, social roles and durable interpersonal memory.
 - Resource accounting, trade, economies, institutions and diplomacy.
 - Multi-civilization emergence and end-to-end acceptance of the full platform.
 
 ## Verification and working agreement
 
-V0.2.15: 453 local tests pass and all four Ubuntu/Windows × Node 22/24 hosted
-jobs passed. Exact implementation and verification are recorded in
-[V0.2.15.md](V0.2.15.md). These are automated/simulated and pinned API-contract tests,
+V0.2.16: 496 automated tests. Exact local and hosted release verification is
+recorded in [V0.2.16.md](V0.2.16.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push

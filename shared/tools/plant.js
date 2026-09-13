@@ -124,3 +124,6 @@ export async function plantCrop(bot, args, policy, session, { responseMs = 1500 
     return { crop: args.crop, position: { x: args.x, y: args.y, z: args.z }, serverObservedSeedling: true, seed, seedCountBefore: before.count, seedCountAfter: after.count, serverInventoryVerified: true, exclusiveCausalityClaimed: false, futureGrowthGuaranteed: false };
   } finally { cleanup(); }
 }
+
+// Shared guarded staging for the finite farming interaction adapters.
+export { snapshot as playerSnapshot, stageSeed as stageCarriedItem };

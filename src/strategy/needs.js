@@ -15,7 +15,7 @@ export function assessNeeds(observation) {
   const safeFoodUnits = inventoryKnown ? [...new Set(items.filter(item => selectFood([item])).map(item => item.name))].reduce((sum, name) => {
     const reserved = observation.seedReserves?.[name];
     const count = items.reduce((n, item) => n + (item.name === name ? item.count : 0), 0);
-    return sum + Math.max(0, count - (Number.isInteger(reserved) && reserved >= 0 && reserved <= 64 ? reserved : 0));
+    return sum + Math.max(0, count - (Number.isInteger(reserved) && reserved >= 0 && reserved <= 128 ? reserved : 0));
   }, 0) : null;
   const pickaxesCarried = inventoryKnown ? items.reduce((sum, item) => sum + (PICKAXES.has(item.name) ? item.count : 0), 0) : null;
   const rawEmpty = observation.inventoryCapacity?.emptyNormalSlots;

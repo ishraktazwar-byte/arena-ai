@@ -112,7 +112,7 @@ test('legacy schema-v7 event history upgrades before adding objectives', async t
   const prior = await disk(f); prior.schemaVersion = 7;
   await writeFile(join(f.directory, 'memory.json'), JSON.stringify(prior));
   const reopened = await MemoryStore.open(f.settings);
-  try { await reopened.remember('objective', observation, { objective }); assert.equal((await disk(f)).schemaVersion, 12); assert.equal(reopened.retrieve(observation)[0].kind, 'spawn'); }
+  try { await reopened.remember('objective', observation, { objective }); assert.equal((await disk(f)).schemaVersion, 13); assert.equal(reopened.retrieve(observation)[0].kind, 'spawn'); }
   finally { await reopened.close(); }
 });
 test('corrupt objective records recover from a valid backup', async t => {

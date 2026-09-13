@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.15 — persistent farm maintenance, seed reserves, recovery and crop-safe traversal.**
+**Current: V0.2.16 — integrated tilling, irrigation, food processing and growth monitoring/recovery.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -254,7 +254,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v12 reads v1–v11 snapshots and upgrades on the next write; older releases
+Memory schema v13 reads v1–v12 snapshots and upgrades on the next write; older releases
 refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
 resource sightings share the 500-record memory budget. The planner receives at most
 eight resource memories separately from event history, with age and recheck flags.
@@ -308,8 +308,9 @@ is not a complete competent-player combat model.
 | V0.2.13 | Guarded planting/replanting and seed consumption evidence | 381 |
 | V0.2.14 | Fresh nearby-drop selection within short plans | 408 |
 | V0.2.15 | Farm maintenance, seed reserves, recovery and farmland traversal | 453 |
+| V0.2.16 | Integrated farm development, irrigation, cooking and growth recovery | 496 |
 
-See `docs/V0.2.15.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.16.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -420,8 +421,8 @@ not be assumed unowned: permission is deployment policy, not ownership detection
 
 Harvesting is allowed while hungry because it is motionless; it still requires
 known vitals, health at least 8, NORMAL risk and safe footing. Collection and other
-skills retain their existing separate preconditions. Replanting, soil preparation,
-cooking and a complete food-production loop remain unfinished. See
+skills retain their existing separate preconditions. At V0.2.12, replanting and
+food production were unfinished; later releases below add them. See
 [V0.2.12 notes](docs/V0.2.12.md). No live testing is requested at this stage.
 
 ## V0.2.13 planting and replanting
@@ -438,8 +439,8 @@ farmland, or invents seeds. Autonomous-world farming scope includes it directly;
 restricted mode uses the existing farming permission, not another approval setting.
 
 A short planner-chosen harvest → replant sequence can use carried reserves, but
-harvested drops are not automatically recovered or reserved. Sustainable farming,
-soil preparation, cooking and general farmland navigation remain unfinished.
+this primitive alone does not recover harvested drops. The V0.2.15–16 workers
+connect recovery, seed protection, navigation and food production.
 See [V0.2.13 notes](docs/V0.2.13.md). Live testing remains deferred.
 
 ## V0.2.14 fresh drop selection
@@ -459,8 +460,8 @@ attempt and no guarantee the selected item came from the preceding harvest/mine.
 An automated integration test runs harvest → fresh pickup → replant from one
 provider response, with no carried planting reserve. This uses a conveniently
 reachable farm-edge drop, not general farmland traversal. Seed reservation,
-recovery after partial plans, multiple yield stacks and sustainable farm management
-remain unfinished. Details: [V0.2.14 notes](docs/V0.2.14.md). No live testing performed.
+recovery after partial plans and farm management were still unfinished in that
+release; V0.2.15–16 add connected farm reconciliation. Details: [V0.2.14 notes](docs/V0.2.14.md). No live testing performed.
 
 ## V0.2.15 farm maintenance
 
@@ -491,3 +492,37 @@ load distant farms, arbitrate multi-agent ownership or guarantee server growth.
 Unknown terrain, shortages, missing light/water, unreachable drops or full inventory
 can still block production. See [V0.2.15 contract and validation](docs/V0.2.15.md).
 No live Minecraft/provider testing has been performed.
+
+
+## V0.2.16 integrated farm production
+
+`establish_farm {x,y,z,crop,targetStock,reserve}` lets the planner choose an observed
+ordinary-soil site, crop and stock goal. Coordinates use crop-block height. The
+local worker connects **tilling, irrigation, food processing and growth recovery**
+with the existing harvesting, pickup and replanting skills. This is an optional
+agent-selected intention, not a scripted life stage. `manage_farm` retains its older
+prepared-plot scope; existing intentions do not silently authorize construction.
+
+- Builds a small fixed-layout plot, workstations and a supported central lamp from
+  carried or supported craftable supplies; uses a usable hoe and shovel.
+- Obtains water from a nearby observed renewable source, or uses a carried water
+  bucket. Excavates only a verified contained pocket and checks water coverage.
+- Cooks potatoes in separately verified furnace phases, or crafts wheat into bread.
+  Carrots/beetroot remain raw food. The guarded furnace also supports listed
+  meats/fish and raw-iron smelting; it does not hunt animals or invent ingredients.
+- Protects both the configured planting reserve and the known bare-bed demand.
+  Limited starting stock can multiply through verified harvest/pickup; missing
+  bootstrap yield stops further depletion, including after restart.
+- Observes actual crop ages, soil moisture and light. Repairs missing supported
+  irrigation/lamp infrastructure and can apply carried bone meal to a suspected
+  wet/lit growth stall. **Random-tick growth is monitored, not guaranteed.**
+
+The strategy receives bounded ordinary-soil site candidates and shortage/growth
+status. Autonomous-world policy needs no per-area approvals; restricted deployment
+requires the existing farming, workspace, navigation and collection scopes.
+
+This is local production on suitable ground, not arbitrary terrain clearing,
+long-distance water/ore acquisition, bulk terraforming, automatic storage or
+multi-agent ownership coordination. Materials, safe approaches, loaded terrain and
+server conditions can still block work. See [V0.2.16](docs/V0.2.16.md) for the exact
+layout, safeguards, automated evidence and remaining live-validation checklist.

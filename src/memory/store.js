@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RESOURCE_LIMIT, resourcePosition, resourceBlock, resourceSightings, mergeResourceRecords, recallResources } from './resources.js';
 
-const SCHEMA = 12; // v1-v11 remain readable; persistent farm intentions require v12.
+const SCHEMA = 13; // v1-v12 remain readable; production intentions and tools require v13.
 const LIMIT = 500;
 const MAX_BYTES = 2 * 1024 * 1024;
-const KINDS = new Set(['spawn', 'death', 'observation', 'goal_result', 'resource_sighting', 'objective', 'farm_intent']);
+const KINDS = new Set(['spawn', 'death', 'observation', 'goal_result', 'resource_sighting', 'objective', 'farm_intent', 'farm_progress']);
 const STATES = new Set(['COMPLETED', 'BLOCKED', 'CANCELLED', 'FAILED']);
-const TOOLS = new Set(['scan', 'wait', 'move_step', 'scan_resources', 'mine', 'craft_options', 'craft', 'workspace_options', 'place_crafting_table', 'craft_at_table', 'scan_items', 'collect_items', 'collect_nearby', 'navigate_local', 'navigate_farm', 'manage_farm', 'stop_farm', 'scan_crops', 'harvest_crop', 'plant_crop']); // Historical names remain readable even if a tool is disabled.
+const TOOLS = new Set(['scan', 'wait', 'move_step', 'scan_resources', 'mine', 'craft_options', 'craft', 'workspace_options', 'place_crafting_table', 'craft_at_table', 'scan_items', 'collect_items', 'collect_nearby', 'navigate_local', 'navigate_farm', 'establish_farm', 'till_soil', 'dig_irrigation', 'fill_water_bucket', 'irrigate_basin', 'place_farm_block', 'fertilize_crop', 'cook_food', 'smelt_iron', 'manage_farm', 'stop_farm', 'scan_crops', 'harvest_crop', 'plant_crop']); // Historical names remain readable even if a tool is disabled.
 const label = value => typeof value === 'string' && /^[a-zA-Z0-9_:.-]{1,160}$/.test(value);
 const keysAre = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join(',') === expected.sort().join(',');
 const coordinate = p => p === null || (keysAre(p, ['x', 'y', 'z']) && Object.values(p).every(n => Number.isFinite(n) && Math.abs(n) <= 30000000));
@@ -23,6 +23,7 @@ function validRecord(record) {
   if (!keysAre(record, ['id', 'at', 'worldId', 'dimension', 'position', 'kind', 'source', 'data'])) return false;
   if (typeof record.id !== 'string' || !/^[0-9a-f-]{36}$/.test(record.id) || !Number.isSafeInteger(record.at) || record.at < 0) return false;
   if (!label(record.worldId) || !(record.dimension === null || label(record.dimension)) || !coordinate(record.position) || !KINDS.has(record.kind)) return false;
+  if (record.kind === 'farm_progress') return record.source === 'local_execution' && label(record.dimension) && keysAre(record.data, ['farm', 'bootstrapPending']) && record.data.farm?.develop === true && validFarm(record.data.farm) && typeof record.data.bootstrapPending === 'boolean';
   if (record.kind === 'farm_intent') return record.source === 'cloud_intent' && label(record.dimension) && keysAre(record.data, ['farm']) && validFarm(record.data.farm);
   if (record.kind === 'objective') return record.source === 'cloud_intent' && label(record.dimension) && keysAre(record.data, ['objective']) && validObjective(record.data.objective);
   if (record.kind === 'resource_sighting') return record.source === 'local_observation' && label(record.dimension) && resourcePosition(record.position) && keysAre(record.data, ['block']) && resourceBlock(record.data.block);
@@ -36,8 +37,8 @@ async function load(path, agent) {
   if (Buffer.byteLength(raw) > MAX_BYTES) throw new MemoryError('memory_corrupt');
   let envelope;
   try { envelope = JSON.parse(raw); } catch { throw new MemoryError('memory_corrupt'); }
-  if (Number.isInteger(envelope?.schemaVersion) && ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
-  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
+  if (Number.isInteger(envelope?.schemaVersion) && ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, SCHEMA].includes(envelope.schemaVersion)) throw new MemoryError('memory_schema_unsupported');
+  if (!keysAre(envelope, ['schemaVersion', 'agent', 'records']) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, SCHEMA].includes(envelope.schemaVersion) || envelope.agent !== agent || !Array.isArray(envelope.records) || envelope.records.length > LIMIT || !envelope.records.every(validRecord)) throw new MemoryError('memory_corrupt');
   if (new Set(envelope.records.map(r => r.id)).size !== envelope.records.length) throw new MemoryError('memory_corrupt');
   const resources = envelope.records.filter(record => record.kind === 'resource_sighting');
   const locations = resources.map(record => JSON.stringify([record.worldId, record.dimension, record.position.x, record.position.y, record.position.z]));
@@ -46,6 +47,9 @@ async function load(path, agent) {
   if (objectives.length > 8 || new Set(objectives.map(record => JSON.stringify([record.worldId, record.dimension]))).size !== objectives.length || (envelope.schemaVersion < 8 && objectives.length)) throw new MemoryError('memory_corrupt');
   const farms = envelope.records.filter(r => r.kind === 'farm_intent');
   if (farms.length > 8 || new Set(farms.map(r => JSON.stringify([r.worldId, r.dimension]))).size !== farms.length || (envelope.schemaVersion < 12 && farms.length)) throw new MemoryError('memory_corrupt');
+  const progress = envelope.records.filter(r => r.kind === 'farm_progress');
+  if (progress.length > 8 || new Set(progress.map(r => JSON.stringify([r.worldId, r.dimension]))).size !== progress.length || (envelope.schemaVersion < 13 && progress.length)) throw new MemoryError('memory_corrupt');
+  if (envelope.schemaVersion < 13 && farms.some(r => r.data.farm?.develop)) throw new MemoryError('memory_corrupt');
   return envelope.records;
 }
 
@@ -102,13 +106,13 @@ export class MemoryStore {
     if (this.closed) return Promise.reject(new MemoryError('memory_closed'));
     // Sightings are generated only from local observation/spawn input, never
     // from a model-supplied goal result or arbitrary direct resource writes.
-    if (!['spawn', 'death', 'observation', 'goal_result', 'objective', 'farm_intent'].includes(kind)) return Promise.reject(new MemoryError('memory_record_invalid'));
+    if (!['spawn', 'death', 'observation', 'goal_result', 'objective', 'farm_intent', 'farm_progress'].includes(kind)) return Promise.reject(new MemoryError('memory_record_invalid'));
     const record = {
       id: randomUUID(), at: this.now(), worldId: this.worldId,
       dimension: observation.dimension ?? null,
       position: observation.position ? { x: observation.position.x, y: observation.position.y, z: observation.position.z } : null,
-      kind, source: ['objective', 'farm_intent'].includes(kind) ? 'cloud_intent' : kind === 'goal_result' ? 'local_execution' : 'local_observation',
-      data: kind === 'farm_intent' ? { farm: structuredClone(result?.farm) } : kind === 'objective' ? { objective: structuredClone(result?.objective) } : kind === 'goal_result' ? { tool: result?.tool, state: result?.state } : { health: observation.health ?? null, food: observation.food ?? null }
+      kind, source: ['objective', 'farm_intent'].includes(kind) ? 'cloud_intent' : ['goal_result', 'farm_progress'].includes(kind) ? 'local_execution' : 'local_observation',
+      data: kind === 'farm_progress' ? { farm: structuredClone(result?.farm), bootstrapPending: result?.bootstrapPending } : kind === 'farm_intent' ? { farm: structuredClone(result?.farm) } : kind === 'objective' ? { objective: structuredClone(result?.objective) } : kind === 'goal_result' ? { tool: result?.tool, state: result?.state } : { health: observation.health ?? null, food: observation.food ?? null }
     };
     if (!validRecord(record)) return Promise.reject(new MemoryError('memory_record_invalid'));
     const sightings = ['spawn', 'observation'].includes(kind) && label(record.dimension) ? resourceSightings(observation).map(item => ({
@@ -117,14 +121,14 @@ export class MemoryStore {
     })) : [];
     const operation = this.queue.then(async () => {
       let records = this.records;
-      if (kind === 'objective' || kind === 'farm_intent') {
+      if (kind === 'objective' || kind === 'farm_intent' || kind === 'farm_progress') {
         const matches = prior => prior.kind === kind && prior.worldId === record.worldId && prior.dimension === record.dimension;
         if (records.some(prior => matches(prior) && prior.at > record.at)) throw new MemoryError('memory_objective_clock_regression');
         records = records.filter(prior => !matches(prior));
       }
       const merged = mergeResourceRecords([...records, record], sightings);
-      const objectives = [...merged.filter(entry => entry.kind === 'objective').slice(-8), ...merged.filter(entry => entry.kind === 'farm_intent').slice(-8)];
-      const next = [...merged.filter(entry => entry.kind !== 'objective' && entry.kind !== 'farm_intent').slice(-(LIMIT - objectives.length)), ...objectives];
+      const objectives = [...merged.filter(entry => entry.kind === 'objective').slice(-8), ...merged.filter(entry => entry.kind === 'farm_intent').slice(-8), ...merged.filter(entry => entry.kind === 'farm_progress').slice(-8)];
+      const next = [...merged.filter(entry => entry.kind !== 'objective' && entry.kind !== 'farm_intent' && entry.kind !== 'farm_progress').slice(-(LIMIT - objectives.length)), ...objectives];
       // Backup is the last validated in-memory snapshot, never untrusted disk data.
       await this.atomicWrite(this.backup, this.records);
       await this.atomicWrite(this.path, next);
@@ -143,7 +147,7 @@ export class MemoryStore {
       const importance = record.kind === 'death' ? 30 : record.kind === 'goal_result' && record.data.state !== 'COMPLETED' ? 15 : 0;
       return importance + proximity + 10 / (1 + ageDays);
     };
-    return this.records.filter(r => r.kind !== 'resource_sighting' && r.kind !== 'objective' && r.kind !== 'farm_intent' && r.worldId === this.worldId && r.dimension === dimension).sort((a, b) => score(b) - score(a) || b.at - a.at).slice(0, limit).map(r => structuredClone(r));
+    return this.records.filter(r => r.kind !== 'resource_sighting' && r.kind !== 'objective' && r.kind !== 'farm_intent' && r.kind !== 'farm_progress' && r.worldId === this.worldId && r.dimension === dimension).sort((a, b) => score(b) - score(a) || b.at - a.at).slice(0, limit).map(r => structuredClone(r));
   }
   retrieveResources(observation = {}, { limit = 8 } = {}) {
     const { dimension, position = null } = observation;
@@ -154,6 +158,10 @@ export class MemoryStore {
     if (!label(observation.dimension)) return null;
     const record = this.records.find(entry => entry.kind === 'objective' && entry.worldId === this.worldId && entry.dimension === observation.dimension);
     return assessObjective(record, observation, this.now());
+  }
+  retrieveFarmProgress({ dimension } = {}) {
+    const record = this.records.find(r => r.kind === 'farm_progress' && r.worldId === this.worldId && r.dimension === dimension && r.at <= this.now());
+    return record ? structuredClone(record.data) : null;
   }
   retrieveFarm({ dimension } = {}) {
     if (!label(dimension)) return null;

@@ -1,9 +1,10 @@
+import { farmFootprint } from '../../src/farming/terrain.js';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
 import { safeFootprint, worldReader } from '../../src/escape.js';
 
 export const craftItems = Object.freeze([
   ...['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry'].map(name => `${name}_planks`),
-  'stick', 'crafting_table',
+  'stick', 'crafting_table', 'furnace', 'bucket', 'torch', 'bread',
   ...['wooden', 'stone'].flatMap(material => ['pickaxe', 'axe', 'shovel', 'sword', 'hoe'].map(tool => `${material}_${tool}`))
 ]);
 export class CraftError extends Error {
@@ -84,9 +85,9 @@ export function craftOptions(bot) {
   }
   return { recoveryRequired: stateFor(bot).recoveryRequired, options };
 }
-function checkBody(bot, window) {
+function checkBody(bot, window, foodRecipe = false) {
   if (bot.version !== '1.21.1') fail('craft_protocol_unsupported');
-  if (!bot.entity?.onGround || bot.health < 12 || bot.food < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !safeFootprint(worldReader(bot), bot.entity.position)) fail('unsafe_crafting_body');
+  if (!bot.entity?.onGround || bot.health < 12 || (!foodRecipe && bot.food < 12) || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !farmFootprint(worldReader(bot), bot.entity.position)) fail('unsafe_crafting_body');
   if ((bot.currentWindow || bot.inventory) !== window) fail('crafting_window_changed');
 }
 function bounded(promise, signal, ms) {
@@ -130,12 +131,12 @@ async function syncSnapshot(bot, window, session, timeoutMs) {
 export async function craftOne(bot, { item }, session, { stepTimeoutMs = 2000 } = {}) {
   const state = stateFor(bot);
   const { window, width } = windowInfo(bot);
-  checkBody(bot, window);
+  checkBody(bot, window, item === 'bread');
   if (!bot._client?.on || !bot._client?.removeListener || !bot._syncWindow || !bot.clickWindow || !bot.closeWindow || !Number.isInteger(bot.QUICK_BAR_START)) fail('craft_api_unavailable');
   if (typeof session.addCleanup !== 'function') fail('cleanup_ownership_unavailable');
   if (state.recoveryRequired) {
     const recovered = await syncSnapshot(bot, window, session, stepTimeoutMs);
-    checkBody(bot, window);
+    checkBody(bot, window, item === 'bread');
     if (recovered.cursor || recovered.slots.slice(0, width * width + 1).some(Boolean)) fail('inventory_recovery_required');
     state.recoveryRequired = false;
   }
@@ -152,13 +153,13 @@ export async function craftOne(bot, { item }, session, { stepTimeoutMs = 2000 } 
     }
   });
   const click = async (slot, button) => {
-    session.guard(() => {}); checkBody(bot, window);
+    session.guard(() => {}); checkBody(bot, window, item === 'bread');
     // Mineflayer has an internal await before hotbar clicks. Never enter that
     // branch: all sources/output destinations here are in main slots <36.
     if (!Number.isInteger(bot.QUICK_BAR_START) || slot >= bot.QUICK_BAR_START || slot < 0) fail('unsafe_click_slot');
     touched = true;
     await bounded(session.guard(() => bot.clickWindow(slot, button, 0)), session.signal, stepTimeoutMs);
-    session.guard(() => {}); checkBody(bot, window);
+    session.guard(() => {}); checkBody(bot, window, item === 'bread');
   };
   for (const placement of plan.placements) {
     if (window.selectedItem || window.slots[placement.slot] || !itemMatches(window.slots[placement.source], placement.ingredient)) fail('ingredients_changed');
@@ -178,7 +179,7 @@ export async function craftOne(bot, { item }, session, { stepTimeoutMs = 2000 } 
   await click(plan.destination, 0);
   if (window.selectedItem) fail('output_not_stored');
   const confirmed = await syncSnapshot(bot, window, session, stepTimeoutMs);
-  checkBody(bot, window);
+  checkBody(bot, window, item === 'bread');
   const counts = new Map();
   for (const stack of confirmed.slots.slice(window.inventoryStart, window.inventoryEnd)) if (stack) counts.set(stack.type, (counts.get(stack.type) || 0) + stack.count);
   if (confirmed.cursor || confirmed.slots.slice(0, width * width + 1).some(Boolean) || (counts.get(plan.itemId) || 0) - (plan.before.get(plan.itemId) || 0) !== plan.count) fail('output_inventory_unconfirmed');
