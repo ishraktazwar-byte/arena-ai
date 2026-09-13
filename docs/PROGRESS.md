@@ -75,7 +75,9 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.16: 496 automated tests. Exact local and hosted release verification is
+V0.2.16: 496 automated tests pass locally on Node 22/24, including a concurrency
+stress run. All four exact-implementation-head Ubuntu/Windows × Node 22/24 hosted
+jobs passed. Exact release verification is
 recorded in [V0.2.16.md](V0.2.16.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
