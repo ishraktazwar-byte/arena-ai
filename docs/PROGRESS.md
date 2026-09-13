@@ -71,7 +71,9 @@ world-building systems are much larger than individual completed tools.
 
 ## Verification and working agreement
 
-V0.2.15 verification is recorded in [V0.2.15.md](V0.2.15.md). These are automated/simulated and pinned API-contract tests,
+V0.2.15: 453 local tests pass and all four Ubuntu/Windows × Node 22/24 hosted
+jobs passed. Exact implementation and verification are recorded in
+[V0.2.15.md](V0.2.15.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push
