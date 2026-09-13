@@ -6,6 +6,10 @@ const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const valid = p => p && [p.x, p.y, p.z].every(Number.isFinite);
 
 // Inspect the player's footprint plus a small margin, not just its center.
+export function safeSupport(block) {
+  return !!block && !UNSAFE_SUPPORT.has(block.name) && block.boundingBox === 'block' && Array.isArray(block.shapes) && block.shapes.some(shape => Array.isArray(shape) && shape.length === 6 && shape.every((v, i) => v === (i < 3 ? 0 : 1)));
+}
+
 export function safeFootprint(blockAt, point) {
   if (!valid(point)) return false;
   for (const dx of [-0.32, 0.32]) for (const dz of [-0.32, 0.32]) {

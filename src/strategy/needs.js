@@ -12,7 +12,11 @@ export function assessNeeds(observation) {
   const risk = ['NORMAL', 'ALERT', 'RECOVER', 'HALT'].includes(observation.risk?.mode) ? observation.risk.mode : 'UNKNOWN';
   const inventoryKnown = observation.inventoryKnown !== false && Array.isArray(observation.inventory) && observation.inventory.length <= 46 && observation.inventory.every(item => item && /^[a-z0-9_]{1,64}$/.test(item.name || '') && Number.isInteger(item.count) && item.count > 0 && item.count <= 64);
   const items = inventoryKnown ? observation.inventory : [];
-  const safeFoodUnits = inventoryKnown ? items.reduce((sum, item) => sum + (selectFood([item]) ? item.count : 0), 0) : null;
+  const safeFoodUnits = inventoryKnown ? [...new Set(items.filter(item => selectFood([item])).map(item => item.name))].reduce((sum, name) => {
+    const reserved = observation.seedReserves?.[name];
+    const count = items.reduce((n, item) => n + (item.name === name ? item.count : 0), 0);
+    return sum + Math.max(0, count - (Number.isInteger(reserved) && reserved >= 0 && reserved <= 64 ? reserved : 0));
+  }, 0) : null;
   const pickaxesCarried = inventoryKnown ? items.reduce((sum, item) => sum + (PICKAXES.has(item.name) ? item.count : 0), 0) : null;
   const rawEmpty = observation.inventoryCapacity?.emptyNormalSlots;
   const emptyNormalSlots = Number.isInteger(rawEmpty) && rawEmpty >= 0 && rawEmpty <= 36 ? rawEmpty : null;

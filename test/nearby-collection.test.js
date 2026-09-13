@@ -106,7 +106,7 @@ test('full inventories fail immediately even if matching stacks might merge', as
   assert.equal((await f.nearby()).state, 'FAILED'); assert.equal(f.snapshots, 0);
 });
 test('unsafe routes are not made safe by dynamic selection', async () => {
-  const f = fixture(); f.setBlock(1, 63, 0, { name: 'farmland', boundingBox: 'block', shapes: [[0, 0, 0, 1, 15 / 16, 1]] });
+  const f = fixture(); f.setBlock(1, 63, 0, { name: 'stone_slab', boundingBox: 'block', shapes: [[0, 0, 0, 1, 0.5, 1]] });
   assert.equal((await f.nearby()).state, 'FAILED'); assert.equal(forward(f), 0);
 });
 test('a cancelled discovery waiter cannot select a drop when it resolves late', async () => {

@@ -1,9 +1,13 @@
+import { validFarm } from '../../src/farming/intent.js';
 import { cropAges } from './farm.js';
 import { craftItems } from './craft.js';
 // Trusted built-in schemas. The active registry determines which are advertised.
 export const definitions = Object.freeze({
   scan: { description: 'Observe health, inventory, entities and visible nearby resources.', args: {} },
   wait: { description: 'Wait briefly while local survival remains active.', args: { durationMs: 'integer 100..5000' } },
+  manage_farm: { description: 'Persist a maintenance goal for existing farmland in a 5x5 plot centered at x,y,z (y is crop height). Choose crop, desired produce stock and protected planting-item reserve (each 1..64). Local workers collect yield, refill empty cells, harvest ripe crops and recover from interruption using fresh observations. No tilling, irrigation or guaranteed yield.', args: { x: 'integer center x', y: 'integer crop y -63..319', z: 'integer center z', crop: 'wheat|carrots|potatoes|beetroots', targetStock: 'integer 1..64', reserve: 'integer 1..64' } },
+  stop_farm: { description: 'Abandon the current dimension farm-maintenance intention and release its planting-item reserve.', args: {} },
+  navigate_farm: { description: 'Walk a bounded route through known full ground, farmland and non-colliding crops. Handles 1/16-block soil edges without jumping or sprinting; navigation permission still required.', args: { x: 'integer block coordinate', z: 'integer block coordinate' } },
   navigate_local: { description: 'Navigate to the center of an empty x,z cell on the current floor, within six blocks and the deployment-authorized world or area. Known flat terrain only; at most twelve short legs. Does not mine, jump or collect intentionally.', args: { x: 'integer block coordinate', z: 'integer block coordinate' } },
   move_step: { description: 'Walk one bounded cardinal step on validated flat ground.', args: { direction: 'north|south|east|west' } },
   collect_nearby: { description: 'Collect one freshly observed nearby dropped stack of the requested item where collection policy permits. Can follow mining or harvesting without knowing future entity IDs. Waits at most one second for discovery, then binds one stable identity. No origin/ownership or complete-yield claim; conservative flat-ground movement only.', args: { expectedItem: 'Minecraft item name' } },
@@ -24,11 +28,13 @@ export function validArgs(tool, args) {
   if (!args || Array.isArray(args) || typeof args !== 'object') return false;
   const keys = Object.keys(args).sort().join(',');
   if (tool === 'scan' || tool === 'scan_resources' || tool === 'craft_options' || tool === 'workspace_options' || tool === 'scan_items' || tool === 'scan_crops') return keys === '';
-  if (tool === 'navigate_local') return keys === 'x,z' && ['x', 'z'].every(key => Number.isInteger(args[key]) && Math.abs(args[key]) <= 30000000);
+  if (tool === 'navigate_local' || tool === 'navigate_farm') return keys === 'x,z' && ['x', 'z'].every(key => Number.isInteger(args[key]) && Math.abs(args[key]) <= 30000000);
   if (tool === 'wait') return keys === 'durationMs' && Number.isInteger(args.durationMs) && args.durationMs >= 100 && args.durationMs <= 5000;
   if (tool === 'move_step') return keys === 'direction' && ['north', 'south', 'east', 'west'].includes(args.direction);
   if (tool === 'craft') return keys === 'item' && craftItems.includes(args.item);
   if (tool === 'place_crafting_table' || tool === 'craft_at_table') return keys === (tool === 'place_crafting_table' ? 'x,y,z' : 'item,x,y,z') && ['x', 'y', 'z'].every(k => Number.isInteger(args[k]) && Math.abs(args[k]) <= 30000000) && args.y >= -64 && args.y <= 319 && (tool !== 'craft_at_table' || craftItems.includes(args.item));
+  if (tool === 'manage_farm') return validFarm(args);
+  if (tool === 'stop_farm') return keys === '';
   if (tool === 'collect_nearby') return keys === 'expectedItem' && typeof args.expectedItem === 'string' && /^[a-z0-9_]{1,64}$/.test(args.expectedItem);
   if (tool === 'collect_items') return keys === 'entityId,entityUuid,expectedItem' && Number.isInteger(args.entityId) && args.entityId >= 0 && args.entityId <= 2147483647 && typeof args.entityUuid === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(args.entityUuid) && typeof args.expectedItem === 'string' && /^[a-z0-9_]{1,64}$/.test(args.expectedItem);
   if (tool === 'plant_crop') return keys === 'crop,x,y,z' && ['x', 'y', 'z'].every(k => Number.isInteger(args[k]) && Math.abs(args[k]) <= 30000000) && args.y >= -64 && args.y <= 319 && typeof args.crop === 'string' && Object.hasOwn(cropAges, args.crop);

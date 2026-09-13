@@ -1,3 +1,4 @@
+import { farmFootprint, farmSurface, farmSegment, farmGrounded, executeFarmStep } from '../../src/farming/terrain.js';
 import { permitsPosition } from '../../src/permissions.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
@@ -17,14 +18,14 @@ function segment(reader, policy, anchor, a, b) {
   if (!approved(policy, anchor.dimension, a) || !approved(policy, anchor.dimension, b) || distance(a, anchor.position) > RADIUS || distance(b, anchor.position) > RADIUS) return false;
   // The authorized box and radius disk are convex: endpoint containment also
   // contains the segment. Terrain is checked along the whole body footprint.
-  return safeSegment(reader, a, b);
+  return (anchor.farm ? farmSegment : safeSegment)(reader, a, b);
 }
 function checkBody(bot, policy, anchor) {
   if (bot.version !== '1.21.1' || bot._client?.state !== 'play') fail('navigation_protocol_unavailable');
   if (bot.entity !== anchor.entity || bot.game?.dimension !== anchor.dimension || !valid(bot.entity?.position)) fail('navigation_body_changed');
   const p = bot.entity.position;
   if (!approved(policy, anchor.dimension, p) || distance(p, anchor.position) > RADIUS) fail('navigation_outside_area');
-  if (Math.abs(p.y - anchor.position.y) > 0.05 || !bot.entity.onGround || bot.health < 12 || bot.food < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !safeFootprint(worldReader(bot), p)) fail('navigation_unsafe_body');
+  if (Math.abs(p.y - anchor.position.y) > (anchor.farm ? 0.08 : 0.05) || !(anchor.farm ? farmGrounded(bot) : bot.entity.onGround) || bot.health < 12 || bot.food < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !(anchor.farm ? farmFootprint : safeFootprint)(worldReader(bot), p)) fail('navigation_unsafe_body');
   if (!Array.isArray(bot.inventory?.slots) || bot.inventory.slots.length < 45 || bot.currentWindow || bot.inventory.selectedItem || bot.inventory.slots.slice(0, 5).some(Boolean)) fail('navigation_inventory_busy');
 }
 
@@ -32,14 +33,16 @@ function checkBody(bot, policy, anchor) {
 // within one synchronous search; movement checks always query current terrain.
 export function planLocalRoute(bot, destination, policy, anchor) {
   const position = bot.entity.position;
-  const source = { x: Math.floor(position.x) + 0.5, y: anchor.position.y, z: Math.floor(position.z) + 0.5 };
+  let source = { x: Math.floor(position.x) + 0.5, y: anchor.position.y, z: Math.floor(position.z) + 0.5 };
+  if (anchor.farm) source = farmSurface(worldReader(bot), source.x, source.z, Math.round(anchor.position.y));
+  if (!source) fail('navigation_start_unsafe');
   const cache = new Map(), read = worldReader(bot);
   const reader = p => {
     const k = `${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`;
     if (!cache.has(k)) cache.set(k, read(p));
     return cache.get(k);
   };
-  if (!approved(policy, anchor.dimension, destination) || distance(destination, anchor.position) > RADIUS || !safeFootprint(reader, destination)) fail('navigation_destination_unsafe');
+  if (!approved(policy, anchor.dimension, destination) || distance(destination, anchor.position) > RADIUS || !(anchor.farm ? farmFootprint : safeFootprint)(reader, destination)) fail('navigation_destination_unsafe');
   if (!segment(reader, policy, anchor, position, source)) fail('navigation_start_unsafe');
   const queue = [{ point: source, parent: -1 }], seen = new Set([key(source)]);
   let end = -1;
@@ -47,7 +50,8 @@ export function planLocalRoute(bot, destination, policy, anchor) {
     const point = queue[index].point;
     if (key(point) === key(destination)) { end = index; break; }
     for (const [dx, dz] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-      const next = { x: point.x + dx, y: point.y, z: point.z + dz };
+      const next = anchor.farm ? farmSurface(reader, point.x + dx, point.z + dz, Math.round(anchor.position.y)) : { x: point.x + dx, y: point.y, z: point.z + dz };
+      if (!next) continue;
       const k = key(next);
       if (seen.has(k) || Math.abs(next.x - anchor.position.x) > RADIUS || Math.abs(next.z - anchor.position.z) > RADIUS) continue;
       if (queue.length >= 169 || !segment(reader, policy, anchor, point, next)) continue;
@@ -63,15 +67,17 @@ export function planLocalRoute(bot, destination, policy, anchor) {
 }
 
 export async function navigateLocal(bot, args, policy, session, {
-  now = Date.now, wait = (ms, signal) => delay(ms, undefined, { signal }), move = executeEscape
+  now = Date.now, wait = (ms, signal) => delay(ms, undefined, { signal }), move, farmTerrain = false
 } = {}) {
+  move ??= farmTerrain ? executeFarmStep : executeEscape;
   const p = bot.entity?.position;
   if (!valid(p) || !policy?.enabled) fail('navigation_disabled_or_unavailable');
   if (!Number.isInteger(args.x) || !Number.isInteger(args.z) || Math.abs(args.x) > 30000000 || Math.abs(args.z) > 30000000) fail('navigation_invalid_destination');
-  const anchor = { entity: bot.entity, dimension: bot.game?.dimension, position: { x: p.x, y: p.y, z: p.z } };
-  // No stairs, slabs, jumps or changes of elevation in this initial route skill.
-  if (Math.abs(p.y - Math.round(p.y)) > 0.05) fail('navigation_unsupported_floor');
-  const destination = { x: args.x + 0.5, y: p.y, z: args.z + 0.5 };
+  const anchor = { farm: farmTerrain, entity: bot.entity, dimension: bot.game?.dimension, position: { x: p.x, y: p.y, z: p.z } };
+  // The farm profile additionally permits 1/16-block soil edges, not stairs or jumps.
+  if (Math.abs(p.y - Math.round(p.y)) > (farmTerrain ? 0.08 : 0.05)) fail('navigation_unsupported_floor');
+  const destination = farmTerrain ? farmSurface(worldReader(bot), args.x + 0.5, args.z + 0.5, Math.round(p.y)) : { x: args.x + 0.5, y: p.y, z: args.z + 0.5 };
+  if (!destination) fail('navigation_destination_unsafe');
   const stop = () => session.guard(() => bot.clearControlStates());
   const deadline = now() + 14000;
   let legs = 0;

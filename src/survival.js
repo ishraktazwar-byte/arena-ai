@@ -1,3 +1,4 @@
+import { foodReserves } from './farming/reservations.js';
 import { planEscape, executeEscape, worldReader } from './escape.js';
 // Conservative policy, not a complete Minecraft danger model.
 const HOSTILES = new Set(['zombie', 'husk', 'drowned', 'zombie_villager', 'skeleton', 'stray', 'bogged', 'spider', 'cave_spider', 'pillager', 'vindicator', 'ravager', 'witch', 'creeper', 'silverfish', 'endermite', 'phantom', 'blaze', 'wither_skeleton', 'hoglin', 'zoglin']);
@@ -31,8 +32,10 @@ export function assessRisk(snapshot) {
   return { mode: 'NORMAL', reason: 'no_detected_urgent_risk', floor: 0 };
 }
 
-export function selectFood(items) {
+export function selectFood(items, { reserves = {}, emergency = false } = {}) {
   for (const name of FOODS) {
+    const count = items.reduce((n, item) => n + (item.name === name && Number.isInteger(item.count) && item.count > 0 ? item.count : 0), 0);
+    if (!emergency && count <= (reserves[name] || 0)) continue;
     const item = items.find(item => item.name === name && item.count > 0);
     if (item) return item;
   }
@@ -72,7 +75,7 @@ export class SurvivalController {
     this.arbiter.setSafetyFloor(this.floor, risk.reason);
     const unsafeToEat = (snapshot.entities || []).some(e => HOSTILES.has(e.name) && e.distance <= 6);
     if ((risk.mode === 'ALERT' || unsafeToEat) && this.arbiter.current?.owner === 'survival-eat') this.arbiter.cancel('unsafe_to_eat');
-    const item = selectFood(snapshot.items);
+    const item = selectFood(snapshot.items, { reserves: foodReserves(this.bot), emergency: snapshot.food < 12 || snapshot.health <= 6 });
     const hungry = snapshot.food <= 14 || (snapshot.health < 20 && snapshot.food < 20);
     const diagnostic = `${risk.mode}:${risk.reason}:${this.floor}:${hungry && !item ? 'no_food' : 'food_ok'}`;
     if (diagnostic !== this.lastDiagnostic) {
@@ -116,7 +119,11 @@ export class SurvivalController {
     void this.arbiter.run('survival-eat', 700, async ({ guard }) => {
       // Re-check ownership after every asynchronous library operation.
       await guard(() => this.bot.equip(item, 'hand'));
-      await guard(() => this.bot.consume());
+      await guard(() => {
+        const fresh = survivalSnapshot(this.bot);
+        if (!selectFood(fresh.items.filter(candidate => candidate.name === item.name), { reserves: foodReserves(this.bot), emergency: fresh.food < 12 || fresh.health <= 6 })) throw new Error('Food now reserved or missing');
+        return this.bot.consume();
+      });
     }, 8000).then(result => {
       if (this.active && generation === this.generation) this.emit({ type: 'SURVIVAL-EAT', item: item.name, ...result });
     }).finally(() => { this.busy = false; });

@@ -19,6 +19,7 @@ export class StrategyController {
     this.nextAt = 0;
     this.controller = null;
     this.pending = null;
+    this.recovery = null;
   }
   start() { this.active = true; this.epoch++; this.nextAt = this.now(); }
   stop() { this.active = false; this.epoch++; this.controller?.abort(); }
@@ -57,7 +58,7 @@ export class StrategyController {
       let source = 'local_fallback';
       if (this.provider) {
         try {
-          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories, resourceMemories, objective, objectiveOptions: { items: objectiveItems, maxCount: 64 }, deferredAttempts: this.attempts.context(observation) }, { signal: this.controller.signal });
+          goal = await this.provider.plan({ identity: this.identity, observation, tools: this.toolRegistry?.catalog() || catalog, recentResults: this.recent.slice(-5), memories, resourceMemories, objective, objectiveOptions: { items: objectiveItems, maxCount: 64 }, deferredAttempts: this.attempts.context(observation), planRecovery: this.recovery?.dimension === observation.dimension ? structuredClone(this.recovery) : null }, { signal: this.controller.signal });
           source = 'cloud';
         } catch (error) {
           if (this.active && epoch === this.epoch) this.emit({ type: 'STRATEGY-PROVIDER', code: ['missing_api_key', 'budget_exhausted', 'authentication_failed', 'network_or_timeout', 'cancelled', 'invalid_provider_output', 'provider_http_error'].includes(error.code) ? error.code : 'provider_unavailable' });
@@ -88,6 +89,7 @@ export class StrategyController {
         if (!this.active || epoch !== this.epoch) return;
         const stepObservation = index === 0 ? current : this.observe();
         if (index > 0 && (this.now() < started || this.now() - started >= 60000 || stepObservation.dimension !== observation.dimension || !Number.isFinite(stepObservation.health) || !Number.isFinite(stepObservation.food) || stepObservation.food < 12 || stepObservation.health < observation.health || stepObservation.risk?.mode !== 'NORMAL')) {
+          this.recovery = { dimension: observation.dimension, completedSteps: index, stoppedTool: steps[index].tool, reason: 'context_changed', reobserveRequired: true };
           this.emit({ type: 'STRATEGY-PLAN-STOP', reason: 'context_changed', completedSteps: index }); return;
         }
         goal = this.toolRegistry ? this.toolRegistry.validate(steps[index]) : validateGoal(steps[index], catalog.map(tool => tool.name));
@@ -107,16 +109,19 @@ export class StrategyController {
         // Only actually attempted steps become historical outcomes, never the
         // plan's unexecuted tail or arbitrary model rationale.
         await this.remember('goal_result', epoch === this.epoch ? this.observe() : stepObservation, { tool: goal.tool, state: result.state });
+        if (steps.length > 1 && (result.state !== 'COMPLETED' || !this.active || epoch !== this.epoch)) this.recovery = { dimension: observation.dimension, completedSteps: index + (result.state === 'COMPLETED' ? 1 : 0), stoppedTool: goal.tool, reason: 'interrupted_or_failed', reobserveRequired: true };
         if (!this.active || epoch !== this.epoch) return;
         const record = { at: this.now(), tool: goal.tool, state: result.state };
         this.recent.push(record);
         if (this.recent.length > 30) this.recent.shift();
         this.emit({ type: 'STRATEGY-RESULT', ...record });
         if (deferred || result.state !== 'COMPLETED') {
+          if (deferred && steps.length > 1) this.recovery = { dimension: observation.dimension, completedSteps: index, stoppedTool: steps[index].tool, reason: 'attempt_cooldown', reobserveRequired: true };
           if (steps.length > 1) this.emit({ type: 'STRATEGY-PLAN-STOP', reason: deferred ? 'attempt_cooldown' : 'step_not_completed', completedSteps: index });
           return;
         }
       }
+      this.recovery = null;
       if (steps.length > 1) this.emit({ type: 'STRATEGY-PLAN-COMPLETE', steps: steps.length });
     } catch {
       this.emit({ type: 'STRATEGY-ERROR', code: 'planning_or_execution_failed' });

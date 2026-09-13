@@ -1,9 +1,9 @@
+import { farmFootprint, farmSegment, farmPassable, farmGrounded, executeFarmStep } from '../../src/farming/terrain.js';
 import { bindBodySession } from '../../src/control.js';
 import { permitsPosition } from '../../src/permissions.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
-import { executeEscape as moveGroundStep, safeFootprint, safeSegment, worldReader } from '../../src/escape.js';
-import { isAir } from './resources.js';
+import { worldReader } from '../../src/escape.js';
 
 const MAX_DISTANCE = 4;
 const MAX_LEGS = 5;
@@ -38,7 +38,7 @@ function visibleDrop(bot, position) {
   const steps = Math.max(1, Math.ceil(distance / 0.1));
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    if (!isAir(bot.blockAt(eye.offset((end.x - eye.x) * t, (end.y - eye.y) * t, (end.z - eye.z) * t)))) return false;
+    if (!farmPassable(bot.blockAt(eye.offset((end.x - eye.x) * t, (end.y - eye.y) * t, (end.z - eye.z) * t)))) return false;
   }
   return true;
 }
@@ -51,7 +51,7 @@ function checkBody(bot, policy, anchor) {
   if (bot.version !== '1.21.1' || bot._client?.state !== 'play') fail('collection_protocol_unavailable');
   const p = bot.entity?.position;
   if (bot.entity !== anchor.entity || bot.game?.dimension !== anchor.dimension || !validPosition(p)) fail('collection_body_changed');
-  if (!bot.entity.onGround || bot.health < 12 || bot.food < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !safeFootprint(worldReader(bot), p)) fail('collection_unsafe_body');
+  if (!farmGrounded(bot) || bot.health < 12 || bot.food < 12 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !farmFootprint(worldReader(bot), p)) fail('collection_unsafe_body');
   if (!approvedFootprint(policy, anchor.dimension, p) || horizontal(p, anchor.position) > MAX_DISTANCE) fail('collection_outside_area');
   if (bot.currentWindow || !Array.isArray(bot.inventory?.slots) || bot.inventory.selectedItem || bot.inventory.slots.slice(0, 5).some(Boolean)) fail('collection_inventory_busy');
 }
@@ -127,7 +127,7 @@ async function inventorySnapshot(bot, session, timeoutMs, itemType) {
   } finally { cleanup(); }
 }
 function approvedSegment(bot, policy, anchor, start, end) {
-  if (!safeSegment(worldReader(bot), start, end)) return false;
+  if (!farmSegment(worldReader(bot), start, end)) return false;
   const steps = Math.max(1, Math.ceil(horizontal(start, end) / 0.1));
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -136,8 +136,25 @@ function approvedSegment(bot, policy, anchor, start, end) {
   return true;
 }
 
+// Advisory route preflight for the farm worker. Execution rechecks every leg.
+export function collectionRouteKnown(bot, position, policy) {
+  const origin = bot.entity?.position;
+  if (!validPosition(origin) || !validPosition(position)) return false;
+  const anchor = { entity: bot.entity, dimension: bot.game?.dimension, position: { x: origin.x, y: origin.y, z: origin.z } };
+  try { checkBody(bot, policy, anchor); } catch { return false; }
+  if (horizontal(origin, position) > MAX_DISTANCE) return false;
+  let start = { ...anchor.position };
+  for (let leg = 0; leg < MAX_LEGS && horizontal(start, position) > PICKUP_DISTANCE; leg++) {
+    const distance = horizontal(start, position), length = Math.min(0.8, distance - 0.4);
+    const end = { x: start.x + (position.x - start.x) / distance * length, y: start.y, z: start.z + (position.z - start.z) / distance * length };
+    if (!approvedSegment(bot, policy, anchor, start, end)) return false;
+    start = end;
+  }
+  return horizontal(start, position) <= PICKUP_DISTANCE;
+}
+
 export async function collectItems(bot, args, policy, session, {
-  now = Date.now, wait = (ms, signal) => delay(ms, undefined, { signal }), move = moveGroundStep,
+  now = Date.now, wait = (ms, signal) => delay(ms, undefined, { signal }), move = executeFarmStep,
   snapshotTimeoutMs = 1500, pickupWaitMs = 1200, motionBudgetMs = 6000
 } = {}) {
   const origin = bot.entity?.position;

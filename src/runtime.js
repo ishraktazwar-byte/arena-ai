@@ -1,3 +1,5 @@
+import { FarmManager } from './farming/manager.js';
+import { foodReserves } from './farming/reservations.js';
 import { scanCrops } from '../shared/tools/farm.js';
 import { ControlArbiter } from './control.js';
 import { SurvivalController, assessRisk, survivalSnapshot } from './survival.js';
@@ -10,11 +12,13 @@ import { inspectWorkspaces } from '../shared/tools/workspace.js';
 import { scanItems } from '../shared/tools/collect.js';
 import { assessNeeds } from './strategy/needs.js';
 
-export function observe(bot, { workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, farmingPolicy = { enabled: false }, operatingMode = 'restricted' } = {}) {
+export function observe(bot, { workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, farmingPolicy = { enabled: false }, operatingMode = 'restricted', farms = null } = {}) {
   const position = bot.entity?.position;
   const slots = bot.inventory?.slots;
   const observation = {
     operatingMode,
+    farmManagement: farms?.status() || null,
+    seedReserves: foodReserves(bot),
     risk: assessRisk(survivalSnapshot(bot)),
     inventoryKnown: typeof bot.inventory?.items === 'function',
     inventoryCapacity: { emptyNormalSlots: Array.isArray(slots) && slots.length >= 45 ? slots.slice(9, 45).filter(slot => slot == null).length : null },
@@ -36,9 +40,9 @@ export function observe(bot, { workspacePolicy = { enabled: false }, collectionP
 }
 
 export function attachRuntime(bot, emit, { provider = null, identity = {}, aiIntervalMs = 300000, memory = null, miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, navigationPolicy = { enabled: false }, farmingPolicy = { enabled: false }, operatingMode = 'restricted' } = {}) {
-  let ready = false;
-  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, farmingPolicy });
-  const observeBody = body => observe(body, { workspacePolicy, collectionPolicy, farmingPolicy, operatingMode });
+  let ready = false, farms;
+  const toolRegistry = createToolRegistry({ miningPolicy, workspacePolicy, collectionPolicy, navigationPolicy, farmingPolicy, farmManagement: !!memory && !!provider });
+  const observeBody = body => observe(body, { workspacePolicy, collectionPolicy, farmingPolicy, operatingMode, farms });
   const remember = (kind, observation) => {
     if (memory) void memory.remember(kind, observation).catch(() => emit({ type: 'MEMORY-ERROR', code: 'memory_write_failed' }));
   };
@@ -54,12 +58,13 @@ export function attachRuntime(bot, emit, { provider = null, identity = {}, aiInt
   });
   const survival = new SurvivalController(bot, arbiter, emit);
   const combat = new CombatController(bot, arbiter, emit);
-  strategy = new StrategyController({ provider, identity, observe: () => observeBody(bot), execute: goal => executeGoal(bot, arbiter, goal, { observe: observeBody, emit, registry: toolRegistry }), emit, intervalMs: aiIntervalMs, memory, toolRegistry });
+  strategy = new StrategyController({ provider, identity, observe: () => observeBody(bot), execute: goal => executeGoal(bot, arbiter, goal, { observe: observeBody, emit, registry: toolRegistry, farms }), emit, intervalMs: aiIntervalMs, memory, toolRegistry });
+  farms = new FarmManager({ bot, memory, policies: { farming: structuredClone(farmingPolicy), collection: structuredClone(collectionPolicy), navigation: structuredClone(navigationPolicy) }, execute: goal => executeGoal(bot, arbiter, goal, { observe: observeBody, emit, registry: toolRegistry, farms }), emit });
   arbiter.setSafetyFloor(1000, 'not_spawned');
-  bot.on('physicsTick', () => { if (ready) { survival.tick(); combat.tick(); if (arbiter.safetyFloor === 0 && !arbiter.current) void strategy.tick(); } });
-  bot.on('spawn', () => { arbiter.cancel('spawn'); ready = true; survival.start(); combat.start(); strategy.start(); survival.tick(); const observation = observeBody(bot); remember('spawn', observation); emit({ type: 'SPAWN', observation }); });
-  bot.on('death', () => { remember('death', observeBody(bot)); ready = false; survival.stop(); combat.stop(); strategy.stop(); arbiter.cancel('death'); stopBody(); emit({ type: 'DEATH' }); });
-  bot.on('end', () => { ready = false; survival.stop(); combat.stop(); strategy.stop(); arbiter.cancel('disconnect'); emit({ type: 'DISCONNECTED' }); });
+  bot.on('physicsTick', () => { if (ready) { survival.tick(); combat.tick(); if (arbiter.safetyFloor === 0 && !arbiter.current && !strategy.busy && !farms.busy) { if (Date.now() >= strategy.nextAt) void strategy.tick(); else void farms.tick(); } } });
+  bot.on('spawn', () => { arbiter.cancel('spawn'); ready = true; survival.start(); combat.start(); strategy.start(); if (provider) farms.start(); survival.tick(); const observation = observeBody(bot); remember('spawn', observation); emit({ type: 'SPAWN', observation }); });
+  bot.on('death', () => { remember('death', observeBody(bot)); ready = false; survival.stop(); combat.stop(); strategy.stop(); farms.stop(); arbiter.cancel('death'); stopBody(); emit({ type: 'DEATH' }); });
+  bot.on('end', () => { ready = false; survival.stop(); combat.stop(); strategy.stop(); farms.stop(); arbiter.cancel('disconnect'); emit({ type: 'DISCONNECTED' }); });
   bot.on('health', () => { strategy.invalidate(); emit({ type: 'HEALTH', health: bot.health, food: bot.food }); });
   // Do not print raw provider/network errors or server-supplied text: they may contain secrets.
   bot.on('error', () => emit({ type: 'CONNECTION_ERROR', message: 'Connection error; verify server and authentication configuration.' }));
@@ -79,7 +84,7 @@ export function attachRuntime(bot, emit, { provider = null, identity = {}, aiInt
         });
       }, 1000);
     },
-    async settle() { await strategy.settle(); await memory?.flush(); },
-    async close() { ready = false; survival.stop(); combat.stop(); strategy.stop(); arbiter.cancel('shutdown'); stopBody(); bot.quit(); await strategy.settle(); await memory?.flush(); }
+    async settle() { await strategy.settle(); await farms.settle(); await memory?.flush(); },
+    async close() { ready = false; survival.stop(); combat.stop(); strategy.stop(); farms.stop(); arbiter.cancel('shutdown'); stopBody(); bot.quit(); await strategy.settle(); await farms.settle(); await memory?.flush(); }
   };
 }

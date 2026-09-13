@@ -1,3 +1,5 @@
+import { farmPassable } from '../../src/farming/terrain.js';
+import { mayPlantSeed } from '../../src/farming/reservations.js';
 import { bindBodySession } from '../../src/control.js';
 import { cropSeeds, cropAges, FarmingError, checkFarmBody, checkFarmSite, boundedFarm } from './farm.js';
 import { readBlock, sameBlock, isAir } from './resources.js';
@@ -12,7 +14,7 @@ function topVisible(bot, soil) {
     const t = i / steps, seen = bot.blockAt(eye.offset((end.x - eye.x) * t, (end.y - eye.y) * t, (end.z - eye.z) * t));
     if (!seen) return false;
     if (sameBlock(seen.position, soil.position)) return true;
-    if (!isAir(seen)) return false;
+    if (!farmPassable(seen)) return false;
   }
   return true;
 }
@@ -77,7 +79,7 @@ export async function plantCrop(bot, args, policy, session, { responseMs = 1500 
   const definition = bot.registry?.blocksByName?.[args.crop], ages = definition?.states?.[0];
   if (!Number.isInteger(id) || id < 0 || definition?.name !== args.crop || !Number.isInteger(definition?.minStateId) || definition.minStateId < 0 || definition.maxStateId - definition.minStateId !== cropAges[args.crop] || !Array.isArray(definition.states) || definition.states.length !== 1 || ages?.name !== 'age' || ages.type !== 'int' || ages.num_values !== cropAges[args.crop] + 1 || !Array.isArray(ages.values) || ages.values.length !== cropAges[args.crop] + 1 || !ages.values.every((value, index) => value === String(index)) || bot.registry?.blocksByStateId?.[definition.minStateId]?.name !== args.crop) fail('plant_registry_unavailable');
   const ageZero = definition.minStateId;
-  const recheck = () => { session.guard(() => {}); return checkPlanting(bot, args, policy, soilState); };
+  const recheck = () => { session.guard(() => {}); if (!mayPlantSeed(bot, seed, args)) fail('plant_seed_reserved'); return checkPlanting(bot, args, policy, soilState); };
   let before = await snapshot(bot, session, id, responseMs);
   recheck();
   if (before.count < 1) fail('plant_seed_missing');

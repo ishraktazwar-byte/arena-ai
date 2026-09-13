@@ -12,7 +12,7 @@ export function readBlock(bot, p) {
   const v = blockVector(bot, p);
   return v && bot.blockAt ? bot.blockAt(v) : null;
 }
-export function visibleResource(bot, block) {
+export function visibleResource(bot, block, { passable = isAir } = {}) {
   const position = bot.entity?.position;
   if (!position?.offset || !block?.position) return false;
   const eye = position.offset(0, 1.62, 0);
@@ -26,7 +26,7 @@ export function visibleResource(bot, block) {
     const seen = bot.blockAt(point);
     if (!seen) return false;
     if (sameBlock(seen.position, block.position)) return true;
-    if (!isAir(seen)) return false;
+    if (!passable(seen)) return false;
   }
   return false;
 }

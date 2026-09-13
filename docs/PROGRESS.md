@@ -1,6 +1,6 @@
 # Arena AI — implementation progress
 
-Updated for V0.2.14. This is a capability ledger, not a percentage or a promise that
+Updated for V0.2.15. This is a capability ledger, not a percentage or a promise that
 all the original instructions are complete. The remaining social/economic and
 world-building systems are much larger than individual completed tools.
 
@@ -17,6 +17,10 @@ world-building systems are much larger than individual completed tools.
 - Visible resource scanning; approved-region single-block mining; independent
   approved-region dropped-item pickup with inventory evidence; guarded starter
   crafting; independently approved crafting-table placement/use.
+- V0.2.15: persistent prepared-plot farm maintenance; seed reserves with survival
+  override; fresh-world recovery after partial work and restart; crop-safe local
+  farmland traversal. Repeated production, stock-based idle/resumption and runtime
+  scheduling are covered by automated tests. No irrigation/construction is claimed.
 - V0.2.14: fresh desired-item drop binding lets short plans collect newly appeared
   items without future entity IDs or another cloud call. A farm-edge harvest →
   pickup → replant sequence is fixture-tested without carried planting reserves.
@@ -42,32 +46,32 @@ world-building systems are much larger than individual completed tools.
 
 - Survival/combat is conservative, not complete: ranged combat, shield tactics,
   broader hazards, sophisticated recovery and equipment policies remain.
-- Movement now includes bounded obstacle-aware local flat-ground routes, not
+- Movement now includes bounded solid-ground/farmland/crop routes, not
   general navigation, stairs, jumps or long-distance gathering.
 - Gathering has bounded component tools, not a complete autonomous supply chain.
   Crafting covers a starter subset, not full recipes, smelting or food production.
 - Needs are advisory thresholds, not learned motivations. Resource memory is a
   sparse sighting index, not a complete terrain/resource map or ownership model.
 - Typed single actions, bounded ephemeral plans and persistent supply intentions
-  exist. Broader long-horizon goals, learned skills and recovery/replanning
-  orchestration remain incomplete. Action sequences do not resume automatically.
+  exist. Prepared-farm maintenance reconciles partial work without replay; broader
+  long-horizon goals and learned skills remain incomplete. General plan recovery
+  summaries are advisory, not automatic resumption of arbitrary tasks.
 - Two starter profiles exist. The requested larger population, social coordination
   and genuinely interacting civilizations are not yet implemented.
 
 ## Not implemented
 
-- Soil preparation, seed reservation and robust sustainable farming loops, growing
-  management, cooking and complete food-production systems; wider building and
-  settlement skills. Separate harvesting and planting/replanting skills now exist.
+- Farm construction/soil preparation, irrigation, lighting installation, cooking,
+  storage and complete food-production systems; wider building and settlements.
+  Existing prepared-plot maintenance is implemented, but live sustainability and
+  multi-agent farm coordination remain unverified/unimplemented respectively.
 - Relationships, trust/reputation, social roles and durable interpersonal memory.
 - Resource accounting, trade, economies, institutions and diplomacy.
 - Multi-civilization emergence and end-to-end acceptance of the full platform.
 
 ## Verification and working agreement
 
-V0.2.14: 408 local tests pass; all four Ubuntu/Windows × Node 22/24 hosted jobs
-passed. Exact implementation and CI proof for fresh drop selection are recorded in
-[V0.2.14.md](V0.2.14.md). These are automated/simulated and pinned API-contract tests,
+V0.2.15 verification is recorded in [V0.2.15.md](V0.2.15.md). These are automated/simulated and pinned API-contract tests,
 not a live Minecraft or real cloud-provider validation claim.
 
 Continue implementing coherent versions, test each, fix discovered issues and push

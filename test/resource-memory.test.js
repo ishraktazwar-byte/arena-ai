@@ -149,7 +149,7 @@ test('schema-v5 event history migrates to v6 before resource sightings are writt
   try {
     assert.equal(reopened.retrieveResources(observation).length, 0);
     await reopened.remember('observation', observation);
-    assert.equal((await saved(f)).schemaVersion, 11); assert.equal(reopened.retrieve(observation).length, 2);
+    assert.equal((await saved(f)).schemaVersion, 12); assert.equal(reopened.retrieve(observation).length, 2);
   } finally { await reopened.close(); }
 });
 test('corrupt resource primary recovers the complete previous event/resource snapshot', async t => {

@@ -2,7 +2,7 @@
 
 An autonomous Minecraft-agent platform under development.
 
-**Current: V0.2.14 — fresh drop selection within short gathering plans.**
+**Current: V0.2.15 — persistent farm maintenance, seed reserves, recovery and crop-safe traversal.**
 
 > The LLM chooses goals. The local body decides how to execute them safely.
 
@@ -254,7 +254,7 @@ The planner receives at most eight records from the current world and dimension,
 ranked using recency, distance and event importance. Restart does not replay old
 actions. Successful/failed/interrupted goal results are historical evidence only.
 No chat, arbitrary model reasoning, API keys or environment contents are stored.
-Memory schema v11 reads v1–v10 snapshots and upgrades on the next write; older releases
+Memory schema v12 reads v1–v11 snapshots and upgrades on the next write; older releases
 refuse unsupported newer schemas rather than silently interpreting newer tool history. Up to 128
 resource sightings share the 500-record memory budget. The planner receives at most
 eight resource memories separately from event history, with age and recheck flags.
@@ -307,8 +307,9 @@ is not a complete competent-player combat model.
 | V0.2.12 | Mature-crop discovery and guarded harvest | 352 |
 | V0.2.13 | Guarded planting/replanting and seed consumption evidence | 381 |
 | V0.2.14 | Fresh nearby-drop selection within short plans | 408 |
+| V0.2.15 | Farm maintenance, seed reserves, recovery and farmland traversal | 453 |
 
-See `docs/V0.2.14.md` for current validation, `docs/V0.1.0.md` for live connection
+See `docs/V0.2.15.md` for current validation, `docs/V0.1.0.md` for live connection
 attempts, and other version documents for individual changes and limitations.
 CI runs syntax/tests on Windows and Ubuntu with Node 22 and 24. A passing test
 matrix does not prove real server combat or cloud-provider behavior.
@@ -460,3 +461,33 @@ provider response, with no carried planting reserve. This uses a conveniently
 reachable farm-edge drop, not general farmland traversal. Seed reservation,
 recovery after partial plans, multiple yield stacks and sustainable farm management
 remain unfinished. Details: [V0.2.14 notes](docs/V0.2.14.md). No live testing performed.
+
+## V0.2.15 farm maintenance
+
+The planner can now choose `manage_farm` with a crop, a known farmland center,
+`targetStock` and `reserve` (each 1–64). That is a persistent WHAT intention, not a
+mandatory life stage. Local code maintains existing farmland within a 5×5 plot:
+recover seed/produce drops, refill empty cells, approach and harvest mature crops,
+wait for growth, stop harvesting at the stock target and resume after consumption.
+`stop_farm` abandons the current dimension's intention.
+
+- Seed reserves protect planting items from ordinary eating and planting elsewhere.
+  Food below 12 or health at/below 6 can override the food reserve for survival.
+- Interrupted work is reconstructed from current terrain and inventory—not a
+  saved action queue. Farm retries back off; broader interrupted short plans give
+  the next planner a non-executable recovery summary.
+- `navigate_farm` crosses known solid ground, dirt paths, farmland and non-colliding crops,
+  including the 1/16-block soil edge, without jumping or sprinting. Harvesting,
+  planting and collection now work from crop-covered farmland too.
+- Farm work runs between cloud planning cycles, one bounded action at a time.
+  It does not spend extra provider requests or displace local survival.
+- Intentions persist per world/dimension. Enabling cloud strategy and the existing
+  farming, collection and navigation scopes makes management available; there is
+  no new per-plot approval requirement in autonomous-world mode.
+
+**Scope:** maintenance of existing prepared plots for wheat, carrots, potatoes and
+beetroot. This does not create irrigation, till soil, manufacture seeds, cook food,
+load distant farms, arbitrate multi-agent ownership or guarantee server growth.
+Unknown terrain, shortages, missing light/water, unreachable drops or full inventory
+can still block production. See [V0.2.15 contract and validation](docs/V0.2.15.md).
+No live Minecraft/provider testing has been performed.

@@ -34,12 +34,12 @@ export class ToolRegistry {
     if (goal.tool === 'mine' || goal.tool === 'craft') context.emit?.({ type: goal.tool === 'mine' ? 'MINING-RESULT' : 'CRAFT-RESULT', state: result.state, reason: result.reason ?? null, result: result.result ?? null });
     if (goal.tool === 'place_crafting_table' || goal.tool === 'craft_at_table') context.emit?.({ type: 'WORKSPACE-RESULT', tool: goal.tool, ...result });
     if (goal.tool === 'collect_items' || goal.tool === 'collect_nearby') context.emit?.({ type: 'COLLECTION-RESULT', tool: goal.tool, ...result });
-    if (goal.tool === 'navigate_local') context.emit?.({ type: 'NAVIGATION-RESULT', ...result });
+    if ((goal.tool === 'navigate_local' || goal.tool === 'navigate_farm')) context.emit?.({ type: 'NAVIGATION-RESULT', ...result });
     if (goal.tool === 'harvest_crop' || goal.tool === 'plant_crop') context.emit?.({ type: 'FARMING-RESULT', tool: goal.tool, ...result });
     return result;
   }
 }
-export function createToolRegistry({ miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, navigationPolicy = { enabled: false }, farmingPolicy = { enabled: false } } = {}) {
+export function createToolRegistry({ miningPolicy = { enabled: false }, workspacePolicy = { enabled: false }, collectionPolicy = { enabled: false }, navigationPolicy = { enabled: false }, farmingPolicy = { enabled: false }, farmManagement = false } = {}) {
   const registry = new ToolRegistry();
   registry.register('scan', { readOnly: true, run: (bot, args, session, { observe }) => ({ observation: observe(bot) }) });
   registry.register('scan_resources', { readOnly: true, run: bot => ({ resources: scanResources(bot) }) });
@@ -58,10 +58,19 @@ export function createToolRegistry({ miningPolicy = { enabled: false }, workspac
   if (collection.enabled) registry.register('collect_nearby', { timeoutMs: 12000, constraints: { ...permissionConstraints(collection), maxDistance: 4, maxSteps: 5, maxTargets: 1, discoveryWaitMs: 1000 }, run: (bot, args, session) => collectNearby(bot, args, collection, session) });
   const navigation = structuredClone(navigationPolicy);
   if (navigation.enabled) registry.register('navigate_local', { timeoutMs: 15000, constraints: { ...permissionConstraints(navigation), maxDistance: 6, maxLegs: 12 }, run: (bot, args, session) => navigateLocal(bot, args, navigation, session) });
+  if (navigation.enabled) registry.register('navigate_farm', { timeoutMs: 15000, constraints: { ...permissionConstraints(navigation), maxDistance: 6, maxLegs: 12 }, run: (bot, args, session) => navigateLocal(bot, args, navigation, session, { farmTerrain: true }) });
   const farming = structuredClone(farmingPolicy);
   registry.register('scan_crops', { readOnly: true, run: bot => scanCrops(bot, farming) });
   if (farming.enabled) registry.register('harvest_crop', { timeoutMs: 6000, constraints: { ...permissionConstraints(farming), maxDistance: 4, maxCrops: 1 }, run: (bot, args, session) => harvestCrop(bot, args, farming, session) });
   if (farming.enabled) registry.register('plant_crop', { timeoutMs: 12000, constraints: { ...permissionConstraints(farming), maxDistance: 4, maxPlants: 1 }, run: (bot, args, session) => plantCrop(bot, args, farming, session) });
+  if (farmManagement) {
+    const configure = (bot, args, session, context) => {
+      if (!context.farms) throw new FarmingError('farm_manager_unavailable');
+      return context.farms.setGoal(args, session);
+    };
+    if (farming.enabled && collection.enabled && navigation.enabled) registry.register('manage_farm', { timeoutMs: 5000, constraints: { ...permissionConstraints(farming), plotWidth: 5 }, run: configure });
+    registry.register('stop_farm', { timeoutMs: 5000, run: (bot, args, session, context) => configure(bot, null, session, context) });
+  }
   registry.register('wait', { timeoutMs: 5500, run: (bot, args, { signal }) => delay(args.durationMs, undefined, { signal }) });
   registry.register('move_step', { timeoutMs: 1200, run: async (bot, args, session, { emit = () => {} }) => {
     const position = bot.entity?.position;

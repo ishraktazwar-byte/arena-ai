@@ -1,14 +1,16 @@
+import { farmFootprint, farmPassable } from '../../src/farming/terrain.js';
 import { bindBodySession } from '../../src/control.js';
 import { permitsBlock } from '../../src/permissions.js';
-import { safeFootprint, worldReader } from '../../src/escape.js';
+import { worldReader } from '../../src/escape.js';
 import { assessRisk, survivalSnapshot } from '../../src/survival.js';
-import { readBlock, visibleResource, sameBlock, isAir } from './resources.js';
+import { readBlock, visibleResource as resourceVisible, sameBlock, isAir } from './resources.js';
 
+const visibleResource = (bot, block) => resourceVisible(bot, block, { passable: farmPassable });
 export const cropSeeds = Object.freeze({ wheat: 'wheat_seeds', carrots: 'carrot', potatoes: 'potato', beetroots: 'beetroot_seeds' });
 export const cropAges = Object.freeze({ wheat: 7, carrots: 7, potatoes: 7, beetroots: 3 });
 export class FarmingError extends Error { constructor(code) { super(code); this.code = code; } }
 const fail = code => { throw new FarmingError(code); };
-function cropAge(block) {
+export function cropAge(block) {
   if (!Object.hasOwn(cropAges, block?.name || '')) return null;
   let age; try { age = block.getProperties?.().age; } catch { return null; }
   // Pinned Prismarine block properties encode integer state values as strings.
@@ -19,14 +21,14 @@ function checkBody(bot) {
   if (bot.version !== '1.21.1' || bot._client?.state !== 'play') fail('harvest_protocol_unavailable');
   // Harvesting does not walk or sprint. Hunger alone must not prevent a safe,
   // motionless food-gathering action; danger and unknown vitals still stop it.
-  if (!bot.entity?.onGround || bot.health < 8 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !safeFootprint(worldReader(bot), bot.entity.position)) fail('harvest_unsafe_body');
+  if (!bot.entity?.onGround || bot.health < 8 || assessRisk(survivalSnapshot(bot)).mode !== 'NORMAL' || !farmFootprint(worldReader(bot), bot.entity.position)) fail('harvest_unsafe_body');
   if (!Array.isArray(bot.inventory?.slots) || bot.inventory.slots.length < 45 || bot.currentWindow || bot.inventory.selectedItem || bot.inventory.slots.slice(0, 5).some(Boolean)) fail('harvest_inventory_busy');
 }
 function checkSite(bot, args, policy, soilState) {
   checkBody(bot);
   if (!permitsBlock(policy, bot.game?.dimension, args)) fail('outside_farming_permission');
   const p = bot.entity.position;
-  if (args.y < Math.floor(p.y) || args.y > Math.floor(p.y) + 1) fail('harvest_vertical_reach');
+  if (args.y < Math.round(p.y) || args.y > Math.round(p.y) + 1) fail('harvest_vertical_reach');
   if (args.x + 1 > p.x - 0.32 && args.x < p.x + 0.32 && args.z + 1 > p.z - 0.32 && args.z < p.z + 0.32) fail('harvest_body_column');
   if (!visibleResource(bot, readBlock(bot, args))) fail('harvest_unreachable');
   const soil = readBlock(bot, { x: args.x, y: args.y - 1, z: args.z });
@@ -46,7 +48,7 @@ export function scanCrops(bot, policy = { enabled: false }) {
   const result = { enabled: !!policy.enabled, crops: [], plantingSites: [] }, p = bot.entity?.position;
   if (!p?.offset || !bot.blockAt || !['x', 'y', 'z'].every(key => Number.isFinite(p[key]) && Math.abs(p[key]) <= 30000000)) return result;
   for (let dx = -4; dx <= 4; dx++) for (let dy = -1; dy <= 3; dy++) for (let dz = -4; dz <= 4; dz++) {
-    const block = readBlock(bot, { x: Math.floor(p.x) + dx, y: Math.floor(p.y) + dy, z: Math.floor(p.z) + dz });
+    const block = readBlock(bot, { x: Math.floor(p.x) + dx, y: Math.round(p.y) + dy, z: Math.floor(p.z) + dz });
     if (isAir(block) && readBlock(bot, { x: block.position.x, y: block.position.y - 1, z: block.position.z })?.name === 'farmland' && visibleResource(bot, block)) {
       const position = { x: block.position.x, y: block.position.y, z: block.position.z };
       const seedOptions = Object.entries(cropSeeds).filter(([, seed]) => bot.inventory?.slots?.slice(9, 45).some(item => item?.name === seed && item.count > 0)).map(([crop]) => crop);

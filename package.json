@@ -1,6 +1,6 @@
 {
   "name": "arena-ai",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "private": true,
   "type": "module",
   "description": "Autonomous Minecraft agents with locally controlled bodies",
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node bot.js alice",
     "test": "node --test",
-    "check": "node --check bot.js && node --check src/runtime.js && node --check src/control.js && node --check src/config.js && node --check src/survival.js && node --check src/escape.js && node --check src/combat.js && node --check src/strategy/goals.js && node --check src/strategy/provider.js && node --check src/strategy/controller.js && node --check src/strategy/budget.js && node --check shared/tools/index.js && node --check src/memory/store.js && node --check shared/tools/definitions.js && node --check shared/tools/resources.js && node --check shared/tools/mine.js && node --check shared/tools/craft.js && node --check shared/tools/workspace.js && node --check shared/tools/collect.js && node --check src/strategy/needs.js && node --check src/strategy/attempts.js && node --check src/memory/resources.js && node --check shared/tools/navigate.js && node --check src/permissions.js && node --check src/strategy/plans.js && node --check src/strategy/objectives.js && node --check shared/tools/farm.js && node --check shared/tools/plant.js"
+    "check": "node --check bot.js && node --check src/runtime.js && node --check src/control.js && node --check src/config.js && node --check src/survival.js && node --check src/escape.js && node --check src/combat.js && node --check src/strategy/goals.js && node --check src/strategy/provider.js && node --check src/strategy/controller.js && node --check src/strategy/budget.js && node --check shared/tools/index.js && node --check src/memory/store.js && node --check shared/tools/definitions.js && node --check shared/tools/resources.js && node --check shared/tools/mine.js && node --check shared/tools/craft.js && node --check shared/tools/workspace.js && node --check shared/tools/collect.js && node --check src/strategy/needs.js && node --check src/strategy/attempts.js && node --check src/memory/resources.js && node --check shared/tools/navigate.js && node --check src/permissions.js && node --check src/strategy/plans.js && node --check src/strategy/objectives.js && node --check shared/tools/farm.js && node --check shared/tools/plant.js && node --check src/farming/intent.js && node --check src/farming/terrain.js && node --check src/farming/reservations.js && node --check src/farming/manager.js"
   },
   "dependencies": {
     "dotenv": "17.4.2",
